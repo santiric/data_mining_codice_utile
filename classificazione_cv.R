@@ -7,12 +7,12 @@ library(tidyverse)
 dati <- dati %>%
   mutate(across(where(is.character), as.factor))
 
-# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE 
+# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE
 # ANCHE SE SONO 0/1, IN QUESTO MODO VA TUTTO FLUIDO DOPO E NON FAI ERRORI
 # COME LISCIARE UN FACTOR
 
 
-# MEGLIO NON AVERE VARIABILI CON TROPPE MODALITÀ, POI È UN CASINO SE ALCUNE 
+# MEGLIO NON AVERE VARIABILI CON TROPPE MODALITÀ, POI È UN CASINO SE ALCUNE
 # VARIABILI NEL FOLD DI VERIFICA HANNO MODALITÀ DIVERSE DA QUELLE NELLA STIMA.
 
 # Variabile risposta ------------------------------------------------------
@@ -21,29 +21,28 @@ dati <- dati %>%
   rename("y" = "risposta_nome")
 
 
-#### y deve eddere numerica 
+#### y deve essere numerica
 
 
 # variabili numeriche e factor --------------------------------------------
 
+id_risposta <- which(names(dati) == "y")
 id_num <- setdiff(which(sapply(dati, function(x) is.numeric(x) | is.integer(x))), id_risposta)
 id_factor <- which(sapply(dati, is.factor))
 id_factor <- id_factor[!names(id_factor) %in% names(dati)[id_risposta]]
 
 
-
 # errore ------------------------------------------------------------------
 
-table(sss$y)/nrow(sss)
 classification_metrics <- function(probs, truth, threshold = 0.5) {
-  
+
   # --- Validazione input ---
   stopifnot(
     "probs e truth devono avere la stessa lunghezza" = length(probs) == length(truth),
     "truth deve contenere solo 0/1 o FALSE/TRUE"    = all(truth %in% c(0, 1, TRUE, FALSE)),
     "threshold deve essere tra 0 e 1"               = threshold >= 0 & threshold <= 1
   )
-  
+
   # Se le probabilità escono dall'intervallo [0, 1] (es. output non calibrati
   # di certi modelli), le clippiamo all'intervallo valido.
   # pmax(0, x) porta a 0 i valori negativi, pmin(1, x) porta a 1 quelli > 1.
@@ -51,10 +50,10 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
   if (n_clipped > 0)
     message(sprintf("Attenzione: %d valore/i fuori da [0,1] cappato/i.", n_clipped))
   probs <- pmax(0, pmin(1, probs))
-  
+
   truth     <- as.integer(truth)
   predicted <- as.integer(probs >= threshold)  # classificazione dura alla soglia
-  
+
   # --- Confusion Matrix ---
   # La confusion matrix è la base di tutte le metriche successive.
   # Mette in relazione i valori predetti con quelli reali in 4 celle:
@@ -62,51 +61,51 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
   #                     Predetto POSITIVO   Predetto NEGATIVO
   #   Reale POSITIVO  |       TP           |       FN         |
   #   Reale NEGATIVO  |       FP           |       TN         |
-  
+
   TP <- sum(predicted == 1 & truth == 1)
   # True Positive: il modello predice positivo ed era davvero positivo.
-  
+
   TN <- sum(predicted == 0 & truth == 0)
   # True Negative: il modello predice negativo ed era davvero negativo.
-  
+
   FP <- sum(predicted == 1 & truth == 0)
   # False Positive (errore di tipo I / "falso allarme"):
   # il modello predice positivo ma era negativo.
   # Es. un test medico che segnala malattia in un paziente sano.
-  
+
   FN <- sum(predicted == 0 & truth == 1)
   # False Negative (errore di tipo II / "mancata rilevazione"):
   # il modello predice negativo ma era positivo.
   # Es. un test medico che non rileva la malattia in un paziente malato.
-  
+
   N <- length(truth)  # numero totale di osservazioni
-  
+
   # --- Accuracy ---
   # Proporzione di predizioni corrette sul totale.
   # Formula: (TP + TN) / N
   # Limite: fuorviante con classi sbilanciate (es. 95% negativi ->
   #         un modello che predice sempre 0 ha accuracy 0.95 senza imparare nulla).
   accuracy <- (TP + TN) / N
-  
+
   # --- Sensitivity (= Recall = True Positive Rate, TPR) ---
   # Tra tutti i casi realmente positivi, quanti ne rileva il modello?
   # Formula: TP / (TP + FN)
   # Alta sensitivity -> pochi falsi negativi. Fondamentale in diagnostica:
   # meglio fare un falso allarme che perdersi un caso reale.
   sensitivity <- if (TP + FN > 0) TP / (TP + FN) else NA
-  
+
   # --- Specificity (= True Negative Rate, TNR) ---
   # Tra tutti i casi realmente negativi, quanti vengono classificati correttamente?
   # Formula: TN / (TN + FP)
   # Alta specificity -> pochi falsi positivi. Importante quando un falso allarme
   # ha costi elevati (es. trattamenti invasivi o screening di massa).
   specificity <- if (TN + FP > 0) TN / (TN + FP) else NA
-  
+
   # --- Precision (necessaria per il calcolo di F1, non esposta direttamente) ---
   # Tra tutti i casi predetti positivi, quanti lo sono davvero?
   # Formula: TP / (TP + FP)
   precision <- if (TP + FP > 0) TP / (TP + FP) else NA
-  
+
   # --- F1 Score ---
   # Media armonica di precision e sensitivity (recall).
   # Formula: 2 * (precision * sensitivity) / (precision + sensitivity)
@@ -117,26 +116,26 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
   f1 <- if (!is.na(precision) && !is.na(sensitivity) &&
             (precision + sensitivity) > 0)
     2 * precision * sensitivity / (precision + sensitivity) else NA
-  
+
   # --- FPR (False Positive Rate = Tasso di Falsi Positivi) ---
   # Tra tutti i negativi reali, quanti vengono erroneamente classificati positivi?
   # Formula: FP / (FP + TN)  =  1 - specificity
   # È l'asse X della curva ROC. Un FPR alto significa molti falsi allarmi.
   fpr <- if (TN + FP > 0) FP / (FP + TN) else NA
-  
+
   # --- FNR (False Negative Rate = Tasso di Falsi Negativi) ---
   # Tra tutti i positivi reali, quanti vengono erroneamente classificati negativi?
   # Formula: FN / (FN + TP)  =  1 - sensitivity
   # Un FNR alto significa che il modello "si perde" molti positivi reali.
   fnr <- if (TP + FN > 0) FN / (TP + FN) else NA
-  
+
   # --- Output strutturato ---
   result <- list(
     threshold    = threshold,
     n            = N,
-    
+
     confusion_matrix = list(TP = TP, TN = TN, FP = FP, FN = FN),
-    
+
     accuracy    = accuracy,
     sensitivity = sensitivity,  # = recall = TPR
     specificity = specificity,  # = TNR
@@ -144,11 +143,10 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
     fpr         = fpr,          # tasso di falsi positivi = 1 - specificity
     fnr         = fnr           # tasso di falsi negativi = 1 - sensitivity
   )
-  
+
   class(result) <- "classification_metrics"
   return(result)
 }
-
 
 
 # one-hot dei fattori a troppi livelli ------------------------------------------------
@@ -166,20 +164,20 @@ print(fattori_high)
 
 # Per ciascuno, crea le indicatrici con contr.sum e sostituisce la colonna
 for (var in fattori_high) {
-  
+
   # Formula dinamica
   formula_var = as.formula(paste("~", var))
-  
+
   # Matrice delle indicatrici (contr.sum droppa l'ultimo livello)
   contrasts_list = setNames(list(contr.sum), var)
   ind_mat = model.matrix(formula_var, dati,
                          contrasts.arg = contrasts_list)[, -1, drop = FALSE]
-  
+
   # Nomi colonne: var_livello (tutti tranne l'ultimo)
   livelli       = levels(dati[[var]])
   livelli_usati = livelli[-length(livelli)]
   colnames(ind_mat) = paste0(var, "_", livelli_usati)
-  
+
   # Sostituisce il fattore originale con le indicatrici
   dati[[var]] = NULL
   dati = cbind(dati, ind_mat)
@@ -213,8 +211,6 @@ print(id_num)
 sss[, id_num] = scale(sss[, id_num])
 
 
-
-
 # fold convalida incrociata -----------------------------------------------
 
 ribilancia       <- TRUE   # FALSE = cv_id == cv_id_sb
@@ -234,46 +230,46 @@ if (!ribilancia) {
   cv_id <- cv_id_sb
   cat("Nessun ribilanciamento: cv_id == cv_id_sb\n")
 } else {
-  
+
   # Inizializziamo le variabili per bloccare la dimensione sul primo fold
   n_rari_target  <- NULL
   n_magg_target  <- NULL
   n_total_target <- NULL
-  
+
   # Creeremo una matrice pulita, senza NA, perché tutti i fold avranno la stessa dimensione
-  cv_id_list <- list() 
-  
+  cv_id_list <- list()
+
   set.seed(seed_cv)
-  
+
   for (k in 1:n_fold) {
     id_tmp  <- cv_id_sb[, k]
     d_tmp   <- sss[id_tmp, ]
-    
+
     # Identifica gli indici dei rari e dei maggioritari disponibili in QUESTO fold
     tutti_rari  <- id_tmp[d_tmp[[classe_minoranza]] == valore_minoranza]
     tutti_magg  <- id_tmp[d_tmp[[classe_minoranza]] != valore_minoranza]
-    
+
     # --- FOLD 1: Definisce la dimensione ancora per tutti ---
     if (k == 1) {
       n_rari_target  <- length(tutti_rari)
       n_magg_target  <- round(n_rari_target * (1 - prop_minoranza) / prop_minoranza)
       n_total_target <- n_rari_target + n_magg_target
     }
-    
+
     # --- ESTRAZIONE BILANCIATA A DIMENSIONE FISSA ---
     # Per i rari: se i rari disponibili sono meno del target, campiona con reinserimento (replace = TRUE)
     mm <- sample(tutti_rari, size = n_rari_target, replace = (length(tutti_rari) < n_rari_target))
-    
+
     # Per i maggioritari: se i maggioritari sono meno del target, usa replace = TRUE
     vv <- sample(tutti_magg, size = n_magg_target, replace = (length(tutti_magg) < n_magg_target))
-    
+
     # Combina e salva nel database del fold k
     cv_id_list[[k]] <- sample(c(mm, vv)) # sample aggiuntivo per mischiare rari e maggioritari
   }
-  
+
   # Trasforma la lista in una matrice perfetta senza NA
   cv_id <- do.call(cbind, cv_id_list)
-  
+
   cat(sprintf(
     "Fold di stima OMOOGENEI: tutti i fold hanno dimensione %d (%.0f%% minoritaria)\n",
     n_total_target, prop_minoranza * 100
@@ -318,10 +314,6 @@ cv_preds <- data.frame(
 )
 
 
-
-
-
-
 # modello lineare passo-passo ----------------------------------------------------------
 
 pred_names <- setdiff(names(sss), "y")
@@ -338,21 +330,21 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]                          # <-- sbilanciato
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]             # <-- rimuove NA (necessario se ribilancia=TRUE)
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test, ]
-  
+
   m_null_k <- lm(y ~ 1, data = train)
   m_step_k <- step(m_null_k, scope = scope, direction = "forward", trace = 0)
-  
+
   probs <- predict(m_step_k, newdata = test)
   probs <- pmax(0, pmin(1, probs))
-  
+
   # salva le previsioni out-of-fold
   if (!"lm_step" %in% names(cv_preds))
     cv_preds$lm_step <- NA_real_
   cv_preds$lm_step[id_test] <- probs
-  
+
   metrics_folds[[k]] <- classification_metrics(probs, truth = test$y)
   cat(k)
 }
@@ -403,14 +395,6 @@ m_step_sum0  <- lm(formula_step, data = sss, contrasts = ctr)
 summary(m_step_sum0)
 
 
-
-
-
-
-
-
-
-
 # modello logistico passo-passo ----------------------------------------------------------
 pred_names <- setdiff(names(sss), "y")
 scope <- list(
@@ -425,20 +409,20 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]                          # <-- sbilanciato
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]             # <-- rimuove NA (necessario se ribilancia=TRUE)
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test, ]
-  
+
   m_null_k <- glm(factor(y) ~ 1, data = train, family = "binomial")
   m_step_k <- step(m_null_k, scope = scope, direction = "forward", trace = 0)
-  
+
   probs <- predict(m_step_k, newdata = test, type = "response")
-  
+
   # salva le previsioni out-of-fold
   if (!"logit_step" %in% names(cv_preds))
     cv_preds$logit_step <- NA_real_
   cv_preds$logit_step[id_test] <- probs
-  
+
   metrics_folds_logit[[k]] <- classification_metrics(probs, truth = test$y)
   cat(k)
 }
@@ -489,12 +473,6 @@ m_step_logit_sum0 <- glm(formula_step, data = sss, family = "binomial", contrast
 summary(m_step_logit_sum0)
 
 
-
-
-
-
-
-
 # RIDGE BINOMIALE ---------------------------------------------------------
 library(glmnet)
 
@@ -528,35 +506,35 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   x_train <- x_full[id_train, ];  y_train <- y_full[id_train]
   x_test  <- x_full[id_test,  ];  y_test  <- y_full[id_test]
-  
+
   # ridge su tutti i lambda per questo fold
   fit_k <- glmnet(x_train, y_train, alpha = 0, family = "binomial",
                   lambda = griglia_lambda)
-  
+
   # probabilità predette: matrice n_test x n_lambda
   probs_mat <- predict(fit_k, newx = x_test, s = griglia_lambda, type = "response")
-  
+
   # ametrica per ogni lambda su questo fold
   perf_fold <- apply(probs_mat, 2, function(probs)
     classification_metrics(probs, truth = y_test)$accuracy)
   # -- alternativa F1 --
   # perf_fold <- apply(probs_mat, 2, function(probs)
   #   classification_metrics(probs, truth = y_test)$f1)
-  
+
   perf_mat[id_test, ] <- matrix(rep(perf_fold, each = length(id_test)),
                                 nrow = length(id_test))
-  
+
   # lambda ottimo di questo fold
   probs_best <- probs_mat[, which.max(perf_fold)]
-  
+
   # salva previsioni out-of-fold con il lambda ottimo del fold
   if (!"ridge_bin" %in% names(cv_preds))
     cv_preds$ridge_bin <- NA_real_
   cv_preds$ridge_bin[id_test] <- probs_best
-  
+
   metrics_folds_ridge[[k]] <- classification_metrics(probs_best, truth = y_test)
   cat(k)
 }
@@ -598,9 +576,6 @@ coef_final <- coef(m_ridge_bin, s = lambda_ottimo)
 print(coef_final)
 
 
-
-
-
 # LASSO BINOMIALE ---------------------------------------------------------
 
 # x_full, y_full, ctr, griglia già definiti sopra (riusali)
@@ -616,30 +591,30 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   x_train <- x_full[id_train, ];  y_train <- y_full[id_train]
   x_test  <- x_full[id_test,  ];  y_test  <- y_full[id_test]
-  
+
   fit_k <- glmnet(x_train, y_train, alpha = 1, family = "binomial",
                   lambda = griglia_lambda_lasso)
-  
+
   probs_mat <- predict(fit_k, newx = x_test, s = griglia_lambda_lasso, type = "response")
-  
+
   perf_fold <- apply(probs_mat, 2, function(probs)
     classification_metrics(probs, truth = y_test)$accuracy)
   # -- alternativa F1 --
   # perf_fold <- apply(probs_mat, 2, function(probs)
   #   classification_metrics(probs, truth = y_test)$f1)
-  
+
   perf_mat_lasso[id_test, ] <- matrix(rep(perf_fold, each = length(id_test)),
                                       nrow = length(id_test))
-  
+
   probs_best <- probs_mat[, which.max(perf_fold)]
-  
+
   if (!"lasso_bin" %in% names(cv_preds))
     cv_preds$lasso_bin <- NA_real_
   cv_preds$lasso_bin[id_test] <- probs_best
-  
+
   metrics_folds_lasso[[k]] <- classification_metrics(probs_best, truth = y_test)
   cat(k)
 }
@@ -677,18 +652,8 @@ m_lasso_bin <- glmnet(x_full, y_full, alpha = 1, family = "binomial",
 coef_final_lasso <- coef(m_lasso_bin, s = lambda_ottimo_lasso)
 print(coef_final_lasso)
 
-df <- extract_lasso_coefs(m.lasso.cv)
+df <- extract_lasso_coefs(m_lasso_bin)
 plot_lasso_coefs(df[1:20,])
-
-
-
-
-
-
-
-
-
-
 
 
 # LDA ---------------------------------------------------------------------
@@ -700,17 +665,17 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_lda_k <- lda(y ~ ., data = train)
   probs    <- predict(m_lda_k, newdata = test)$posterior[, 2]
-  
+
   if (!"lda" %in% names(cv_preds))
     cv_preds$lda <- NA_real_
   cv_preds$lda[id_test] <- probs
-  
+
   metrics_folds_lda[[k]] <- classification_metrics(probs, truth = test$y)
   cat(k)
 }
@@ -754,17 +719,17 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_qda_k <- qda(y ~ ., data = train)
   probs    <- predict(m_qda_k, newdata = test)$posterior[, 2]
-  
+
   if (!"qda" %in% names(cv_preds))
     cv_preds$qda <- NA_real_
   cv_preds$qda[id_test] <- probs
-  
+
   metrics_folds_qda[[k]] <- classification_metrics(probs, truth = test$y)
   cat(k)
 }
@@ -797,11 +762,6 @@ cat(paste(c(
 m_qda <- qda(y ~ ., data = sss)
 
 
-
-
-
-
-
 # GAM LOGISTICO -----------------------------------------------------------
 library(gam)
 
@@ -811,21 +771,21 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   gam_null_k <- gam(y ~ 1, family = binomial, data = train)
   gam_scope_k <- gam.scope(train, response = id_risposta,
                            smoother = "s", arg = c("df=2", "df=3", "df=4"))
   gam_sel_k <- step.Gam(gam_null_k, gam_scope_k, trace = TRUE)
-  
+
   probs <- predict(gam_sel_k, newdata = test, type = "response")
-  
+
   if (!"gam_logit" %in% names(cv_preds))
     cv_preds$gam_logit <- NA_real_
   cv_preds$gam_logit[id_test] <- probs
-  
+
   metrics_folds_gam[[k]] <- classification_metrics(probs, truth = test$y)
   cat(k)
 }
@@ -887,16 +847,6 @@ plot(gam_logit_sum0, terms = smooth_terms, se = TRUE)
 par(mfrow = c(1, 1))
 
 
-
-
-
-
-
-
-
-
-
-
 # ALBERO DI CLASSIFICAZIONE -----------------------------------------------
 library(tree)
 
@@ -931,25 +881,25 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_tree_k <- tree(factor(y) ~ ., data = train,
                    split = "deviance",
                    control = tree.control(nobs    = nrow(train),
                                           minsize = 2,
                                           mindev  = 0.001))
-  
+
   # tutti i livelli di potatura
   tree_list <- lapply(dim_albero, function(l) prune.tree(m_tree_k, best = l))
   pred_list <- lapply(tree_list,  function(t) predict(t, newdata = test)[, 2])
   metr_list <- lapply(pred_list,  function(p) classification_metrics(p, truth = test$y))
-  
+
   # salva le 6 metriche per ogni dimensione
   metr_m[k, , ] <- sapply(metr_list, function(m)
     c(m$accuracy, m$sensitivity, m$specificity, m$f1, m$fpr, m$fnr))
-  
+
   cat(k)
 }
 
@@ -1002,7 +952,7 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   m_tree_k <- tree(factor(y) ~ ., data = sss[id_train, ],
                    split = "deviance",
                    control = tree.control(nobs    = length(id_train),
@@ -1023,10 +973,6 @@ tail(m_tree_best$frame$var)
 m_tree_best$frame$splits
 
 
-
-
-
-
 # mars --------------------------------------------------------------------
 
 pred_names <- setdiff(names(sss), "y")
@@ -1038,22 +984,22 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test, ]
-  
+
   m_mars_k <- polymars(train$y,
                        train[, pred_names],
                        factors = factor_cols,
                        gcv = 2)
-  
+
   probs <- predict(m_mars_k, test[, pred_names])
   probs <- pmax(0, pmin(1, probs))
-  
+
   if (!"mars" %in% names(cv_preds))
     cv_preds$mars <- NA_real_
   cv_preds$mars[id_test] <- probs
-  
+
   metrics_folds_mars[[k]] <- classification_metrics(probs, truth = test$y)
   cat(k)
 }
@@ -1110,17 +1056,8 @@ mtext(paste("predictor1 =", pred_names_mars[4],
       side = 1, line = 3, cex = 0.9)
 
 # 1 predittore vs risposta
-plot(m_mars_final, predictor1 = 59)
+plot(m_mars_final, predictor1 = 4)
 title(sub = pred_names_mars[4], cex.sub = 1, font.sub = 2)
-
-
-
-
-
-
-
-
-
 
 
 # RANDOM FOREST -----------------------------------------------------------
@@ -1135,7 +1072,7 @@ n_trees <- 50 # Definito fuori per comodità
 err_prog_cv <- matrix(0, nrow = n_trees, ncol = n_mtry)
 colnames(err_prog_cv) <- paste0("mtry_", nvar)
 
-# CV loop esplicito 
+# CV loop esplicito
 perf_mat_rf <- matrix(NA_real_, nrow = nrow(sss), ncol = n_mtry)
 metrics_folds_rf <- vector("list", ncol(cv_id))
 
@@ -1145,10 +1082,10 @@ for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   perf_fold <- numeric(n_mtry)
   probs_fold_list <- matrix(NA_real_, nrow = length(id_test), ncol = n_mtry)
-  
+
   for (m in seq_along(nvar)) {
     fit_k <- randomForest(
       x        = sss[id_train, -id_risposta],
@@ -1160,37 +1097,37 @@ for (k in 1:ncol(cv_id)) {
       nodesize = 10,
       do.trace = FALSE
     )
-    
+
     # fit_k$test$err.rate[, 1] contiene il misclassification error sul test set
     err_prog_cv[, m] <- err_prog_cv[, m] + fit_k$test$err.rate[, 1]
-    
+
     # Estraiamo le probabilità predette per la classe "1" sul test set (al 50esimo albero)
     probs_mat_m <- fit_k$test$votes[, "1"]
     probs_fold_list[, m] <- probs_mat_m
-    
+
     # Calcolo metrica finale per questo specifico mtry
     perf_fold[m] <- classification_metrics(probs_mat_m, truth = sss$y[id_test])$accuracy
   }
-  
+
   perf_mat_rf[id_test, ] <- matrix(rep(perf_fold, each = length(id_test)),
                                    nrow = length(id_test))
-  
+
   best_m_idx <- which.max(perf_fold)
   probs_best <- probs_fold_list[, best_m_idx]
-  
+
   if (!"rf" %in% names(cv_preds)) cv_preds$rf <- NA_real_
   cv_preds$rf[id_test] <- probs_best
   metrics_folds_rf[[k]] <- classification_metrics(probs_best, truth = sss$y[id_test])
-  
+
   cat(k, " ")
 }
 
-# Mtry ottimo globale e Plot 
+# Mtry ottimo globale e Plot
 perf_mean_rf  <- colMeans(perf_mat_rf, na.rm = TRUE)
 mtry_ottimo   <- nvar[which.max(perf_mean_rf)]
 cat("\nMtry ottimo:", mtry_ottimo, "\n")
 
-# Calcolo medie e PLOT 
+# Calcolo medie e PLOT
 # Dividiamo la somma degli errori per il numero di fold per ottenere la media
 err_prog_cv <- err_prog_cv / ncol(cv_id)
 
@@ -1199,7 +1136,7 @@ acc_prog_cv <- 1 - err_prog_cv
 
 # Plot unico usando matplot (base R)
 matplot(1:n_trees, acc_prog_cv, type = "l", lty = 1, lwd = 2, col = 1:n_mtry,
-        xlab = "Numero di Alberi (ntree)", 
+        xlab = "Numero di Alberi (ntree)",
         ylab = "Accuracy OOF (Out-Of-Fold)",
         main = "Andamento dell'Accuracy allo scorrere degli alberi per mtry")
 legend("bottomright", legend = paste("mtry =", nvar), col = 1:n_mtry, lty = 1, lwd = 2)
@@ -1240,19 +1177,11 @@ m_rf_finale <- randomForest(
 )
 
 
-
-
 # Plotta automaticamente le metriche di importanza
-varImpPlot(m_rf_finale, 
+varImpPlot(m_rf_finale,
            main = "Importanza delle Variabili - Modello Finale",
            pch = 16, # Cambia il pallino per renderlo più visibile
            col = "navy")
-
-
-
-
-
-
 
 
 # ==============================================================================

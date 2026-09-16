@@ -7,12 +7,12 @@ library(tidyverse)
 dati <- dati %>%
   mutate(across(where(is.character), as.factor))
 
-# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE 
+# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE
 # ANCHE SE SONO 0/1, IN QUESTO MODO VA TUTTO FLUIDO DOPO E NON FAI ERRORI
 # COME LISCIARE UN FACTOR
 
 
-# MEGLIO NON AVERE VARIABILI CON TROPPE MODALITÀ, POI È UN CASINO SE ALCUNE 
+# MEGLIO NON AVERE VARIABILI CON TROPPE MODALITÀ, POI È UN CASINO SE ALCUNE
 # VARIABILI NEL FOLD DI VERIFICA HANNO MODALITÀ DIVERSE DA QUELLE NELLA STIMA.
 # one-hot dei fattori a troppi livelli ------------------------------------------------
 
@@ -29,20 +29,20 @@ print(fattori_high)
 
 # Per ciascuno, crea le indicatrici con contr.sum e sostituisce la colonna
 for (var in fattori_high) {
-  
+
   # Formula dinamica
   formula_var = as.formula(paste("~", var))
-  
+
   # Matrice delle indicatrici (contr.sum droppa l'ultimo livello)
   contrasts_list = setNames(list(contr.sum), var)
   ind_mat = model.matrix(formula_var, dati,
                          contrasts.arg = contrasts_list)[, -1, drop = FALSE]
-  
+
   # Nomi colonne: var_livello (tutti tranne l'ultimo)
   livelli       = levels(dati[[var]])
   livelli_usati = livelli[-length(livelli)]
   colnames(ind_mat) = paste0(var, "_", livelli_usati)
-  
+
   # Sostituisce il fattore originale con le indicatrici
   dati[[var]] = NULL
   dati = cbind(dati, ind_mat)
@@ -67,7 +67,6 @@ dati$y <- log(dati$y)
 dati$y <- pmax(0,dati$y)
 
 
-
 # variabili numeriche e factor --------------------------------------------
 
 id_num <- setdiff(which(sapply(dati, function(x) is.numeric(x) | is.integer(x))), id_risposta)
@@ -79,10 +78,10 @@ id_factor <- id_factor[!names(id_factor) %in% names(dati)[id_risposta]]
 # specifica min_cap e max_cap se la risposta è per definizione bounded
 errore <- function(pred, vero, tipo = "mse", min_cap = NULL, max_cap = NULL, pesi = NULL) {
   tipo <- match.arg(tipo, c("mae", "mse"))
-  
+
   if (!is.null(min_cap)) pred <- pmax(pred, min_cap)
   if (!is.null(max_cap)) pred <- pmin(pred, max_cap)
-  
+
   if (!is.null(pesi)) {
     pesi <- pesi / sum(pesi)  # normalizza a somma 1
     switch(tipo,
@@ -98,51 +97,7 @@ errore <- function(pred, vero, tipo = "mse", min_cap = NULL, max_cap = NULL, pes
 }
 
 
-
-# one-hot dei fattori a troppi livelli ------------------------------------------------
-
-# Soglia per "troppe modalità"
-soglia_modalita = 32
-
-# Trova tutti i fattori con numero di livelli >= soglia
-fattori_high = names(dati)[sapply(dati, function(x) {
-  is.factor(x) && nlevels(x) >= soglia_modalita
-})]
-
-cat("Fattori con", soglia_modalita, "+ modalità trovati:\n")
-print(fattori_high)
-
-# Per ciascuno, crea le indicatrici con contr.sum e sostituisce la colonna
-for (var in fattori_high) {
-  
-  # Formula dinamica
-  formula_var = as.formula(paste("~", var))
-  
-  # Matrice delle indicatrici (contr.sum droppa l'ultimo livello)
-  contrasts_list = setNames(list(contr.sum), var)
-  ind_mat = model.matrix(formula_var, dati,
-                         contrasts.arg = contrasts_list)[, -1, drop = FALSE]
-  
-  # Nomi colonne: var_livello (tutti tranne l'ultimo)
-  livelli       = levels(dati[[var]])
-  livelli_usati = livelli[-length(livelli)]
-  colnames(ind_mat) = paste0(var, "_", livelli_usati)
-  
-  # Sostituisce il fattore originale con le indicatrici
-  dati[[var]] = NULL
-  dati = cbind(dati, ind_mat)
-}
-
-cat("\nDimensioni dataset dopo trasformazione:", dim(dati), "\n")
-cat("Nuove colonne aggiunte per ogni fattore:\n")
-for (var in fattori_high) {
-  nuove_col = grep(paste0("^", var, "_"), names(dati), value = TRUE)
-  cat(" -", var, "->", length(nuove_col), "indicatrici\n")
-}
-
-
 # rinomina ----------------------------------------------------------------
-
 
 
 # solo per riciclare codice:
@@ -151,7 +106,7 @@ sss <- dati
 
 # Salvataggio dati non standardizzati e matrici design originali ----------
 sss_raw <- sss
-m0_sum0_raw  <- lm(Y ~ . - y, data = sss_raw, contrasts = contrasts_list)
+m0_sum0_raw  <- lm(y ~ ., data = sss_raw, contrasts = contrasts_list)
 X_sum0_raw   <- model.matrix(m0_sum0_raw)[, -1]
 
 # Standardizzazione -------------------------------------------------------
@@ -169,13 +124,14 @@ cv_id = matrix(sample(1:NROW(dati)),ncol = 4)
 
 
 ### se hai delle osservazioni dipendenti e non vuoi mischiarle:
-set.seed(seed_cv)
-soggetti      <- unique(sss$soggetto_id)
-n_sogg        <- length(soggetti)
-n_trunc_sogg  <- floor(n_sogg / n_fold) * n_fold
-soggetti_camp <- sample(soggetti, n_trunc_sogg)
-sogg_fold     <- matrix(soggetti_camp, ncol = n_fold)
-cv_id <- apply(sogg_fold, 2, function(ids) which(sss$soggetto_id %in% ids))
+### (imposta prima seed_cv e n_fold, altrimenti questo blocco dà errore)
+# set.seed(seed_cv)
+# soggetti      <- unique(sss$soggetto_id)
+# n_sogg        <- length(soggetti)
+# n_trunc_sogg  <- floor(n_sogg / n_fold) * n_fold
+# soggetti_camp <- sample(soggetti, n_trunc_sogg)
+# sogg_fold     <- matrix(soggetti_camp, ncol = n_fold)
+# cv_id <- apply(sogg_fold, 2, function(ids) which(sss$soggetto_id %in% ids))
 
 
 # Baseline - media --------------------------------------------------------
@@ -185,16 +141,15 @@ err_base_folds <- numeric(ncol(cv_id))
 for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id[, k]
   id_train <- as.vector(cv_id[, -k])
-  
+
   m_null <- lm(y ~ 1, data = sss[id_train, ])
   pred   <- predict(m_null, newdata = sss[id_test, ])
-  
+
   err_base_folds[k] <- errore(pred, sss$y[id_test])
 }
 
 err_base <- mean(err_base_folds)
 cat("CV MSE modello nullo:", err_base, "\n")
-
 
 
 # Passo-passo ----------------------------------------------------------
@@ -207,14 +162,14 @@ err_step_folds <- numeric(ncol(cv_id))
 for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id[, k]
   id_train <- as.vector(cv_id[, -k])
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test, ]
-  
+
   # Selezione sul training
   m_null_k <- lm(y ~ 1, data = train)
   m_step_k <- step(m_null_k, scope = scope, direction = "forward", trace = 0) #,k = log(nrow(train)) se vuoi bic
-  
+
   # Errore sul test
   pred <- predict(m_step_k, newdata = test)
   err_step_folds[k] <- errore(pred, test$y)
@@ -246,8 +201,6 @@ summary(m_step_sum0)
 n_scelti_vars     <- length(attr(terms(m_step), "term.labels"))
 n_disponibili_vars <- length(nomi[-id_risposta])
 cat("Variabili scelte:", n_scelti_vars, "su", n_disponibili_vars, "disponibili\n")
-
-
 
 
 # RIDGE -------------------------------------------------------------------
@@ -292,7 +245,6 @@ m_ridge <-glmnet(x[,-1], y, alpha = 0, lambda = lambda.ottimo)
 # Coefficienti del modello finale
 coef_final <- coef(m_ridge, s = lambda.ottimo)
 print(coef_final)
-
 
 
 # LASSO -------------------------------------------------------------------
@@ -388,29 +340,25 @@ coef_final <- coef(m_lasso_int, s = lambda.ottimo)
 print(coef_final)
 
 
-
-
-
-
 # GAM ----------------------------------------
 library(gam)
 err_gam_folds <- numeric(ncol(cv_id))
 for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id[, k]
   id_train <- as.vector(cv_id[, -k])
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test, ]
-  
+
   # Scope GAM sul training
   df_list    <- paste0("df=", c(4,8))
   gam_list_k <- gam.scope(train, response = id_risposta,
                           smoother = "s", arg = df_list)
-  
+
   # Selezione stepwise sul training
   gam_null_k <- gam(y ~ 1, data = train)
   gam_sel_k  <- step.Gam(gam_null_k, gam_list_k, trace = TRUE) # steps= ...
-  
+
   # Errore sul test
   pred <- predict(gam_sel_k, newdata = test)
   err_gam_folds[k] <- errore(pred, test$y)
@@ -457,15 +405,11 @@ par(mfrow = c(1, length(smooth_terms)))
 plot(gam_sum0, terms = smooth_terms, se = TRUE)
 
 
-
-
-
-
 # Albero (fold allineati) -------------------------
 library(tree)
 #Crescita albero molto fitto su tutti i dati
 m_tree <- tree(y ~ .,
-               data = sss[, -id_risposta],
+               data = sss, # y deve restare nei dati, altrimenti la formula fallisce
                control = tree.control(nobs = NROW(sss), minsize = 1, mindev = 0))
 plot(m_tree)
 #Griglia di dimensioni (size) da esplorare
@@ -478,16 +422,16 @@ cv_dev <- matrix(NA, nrow = K, ncol = length(size_grid))
 for (k in 1:K) {
   idx_val  <- cv_id[, k]
   idx_tra  <- setdiff(1:nrow(sss), idx_val)
-  
+
   # Passa il dataframe completo con y inclusa
   dati_tra <- sss[idx_tra, ]
   dati_val <- sss[idx_val, ]
-  
+
   # Albero fitto sul training del fold
   m_k <- tree(y ~ .,
               data = dati_tra,  # togli solo le colonne non volute
               control = tree.control(nobs = length(idx_tra), minsize = 1, mindev = 0))
-  
+
   for (j in seq_along(size_grid)) {
     s_eff <- min(size_grid[j], max(summary(m_k)$size))
     m_k_p <- prune.tree(m_k, best = s_eff)
@@ -515,9 +459,6 @@ err_tree <- min(cv_mean)
 cat("CV errore albero:", err_tree, "\n")
 
 
-
-
-
 # MARS --------------------------------------------------------------------
 library(polspline)
 
@@ -530,16 +471,16 @@ err_mars_folds <- numeric(ncol(cv_id))
 for (k in 1:ncol(cv_id)) {
   id_test  <- cv_id[, k]
   id_train <- as.vector(cv_id[, -k])
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test, ]
-  
+
   # Adatta id_factor al sottoinsieme train (stessi indici, stesso dataset)
   m_mars_k <- polymars(responses  = train$y,
                        predictors = train[, -id_risposta],
                        factors    = id_factor,
                        gcv        = 4)
-  
+
   pred <- predict(m_mars_k, test[, -id_risposta])
   err_mars_folds[k] <- errore(pred, test$y)
   cat(k)
@@ -573,16 +514,13 @@ summary(m_mars)
 
 # 2 esp vs resp
 plot(m_mars, predictor1 = 4, predictor2 = 5, phi = 10, theta = 60)
-mtext(paste("predictor1 =", names(sss[,-id_risposta])[4], 
-            "| predictor2 =", names(sss[,-id_risposta])[5]), 
+mtext(paste("predictor1 =", names(sss[,-id_risposta])[4],
+            "| predictor2 =", names(sss[,-id_risposta])[5]),
       side = 1, line = 3, cex = 0.9)
 
 # 1 esp vs resp
 plot(m_mars, predictor1 = 4)
 title(sub = names(sss[,-id_risposta])[4], cex.sub = 1, font.sub = 2)
-
-
-
 
 
 # PPR ---------------------------------------------------------------------
@@ -593,14 +531,14 @@ for (i in seq_along(nterms_grid)) {
   cat(i)
   m <- nterms_grid[i]
   fold_err <- numeric(ncol(cv_id))
-  
+
   for (k in 1:ncol(cv_id)) {
     id_test  <- cv_id[, k]
     id_train <- as.vector(cv_id[, -k])
-    
+
     train <- sss[id_train, ]
     test  <- sss[id_test, ]
-    
+
     mod <- ppr(y ~ ., data = train, nterms = m, sm.method = "gcvspline", gcvpen = 3)
     pred <- predict(mod, newdata = test)
     fold_err[k] <- errore(pred, test$y)
@@ -609,11 +547,11 @@ for (i in seq_along(nterms_grid)) {
 }
 
 # Miglior numero di termini
-best_nterms <- nterms_grid[which.min(cv_err)]
+best_nterms <- nterms_grid[which.min(ppr_cv_err)]
 cat("Miglior nterms:", best_nterms, "\n")
 
 # Plot CV error
-plot(nterms_grid, cv_err, type = "b", pch = 16,
+plot(nterms_grid, ppr_cv_err, type = "b", pch = 16,
      xlab = "N. termini", ylab = "CV error")
 abline(v = best_nterms, col = 3, lwd = 2)
 
@@ -621,8 +559,6 @@ abline(v = best_nterms, col = 3, lwd = 2)
 m_ppr <- ppr(y ~ ., data = sss, nterms = best_nterms, sm.method = "gcvspline", gcvpen = 3)
 err_ppr <- min(ppr_cv_err)
 cat("CV errore ppr:", err_ppr, "\n")
-
-
 
 
 # random forest -----------------------------------------------------------
@@ -646,14 +582,14 @@ for (m in seq_along(nvar)) {
   cat(m)
   fold_err      <- numeric(ncol(cv_id))
   fold_mse_mat  <- matrix(0, ntree, ncol(cv_id))  # OOB curve per fold
-  
+
   for (k in 1:ncol(cv_id)) {
     id_test  <- cv_id[, k]
     id_train <- as.vector(cv_id[, -k])
-    
+
     train <- sss[id_train, ]
     test  <- sss[id_test, ]
-    
+
     mod  <- randomForest(y ~ ., data = train,
                          ntree = ntree, mtry = nvar[m],
                          keep.forest = TRUE)
@@ -661,7 +597,7 @@ for (m in seq_along(nvar)) {
     fold_err[k]       <- errore(pred, test$y)
     fold_mse_mat[, k] <- mod$mse   # OOB MSE cumulativo (train)
   }
-  
+
   rf_cv_err[m]          <- mean(fold_err)
   rf_cv_mse_curve[, m]  <- rowMeans(fold_mse_mat)  # media sui fold
 }
@@ -690,9 +626,6 @@ err_rf <- min(rf_cv_err)
 cat("CV errore RF:", err_rf, "\n")
 
 
-
-
-
 ### variante con oob , subottimale ma veloce
 # nvar <- c(25,27,30,33,35,38)
 #ntree = 200
@@ -715,8 +648,6 @@ cat("CV errore RF:", err_rf, "\n")
 
 #m_rf=randomForest(y~.,sss,mtry=m,ntree=ntree,importance=T)
 #varImpPlot(m_rf)
-
-
 
 
 # confronto tra modelli ---------------------------------------------------

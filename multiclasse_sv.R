@@ -7,7 +7,7 @@ dati <- dati %>%
 dati <- dati %>%
   mutate(across(where(is.factor),factor))
 
-# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE 
+# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE
 # ANCHE SE SONO 0/1, IN QUESTO MODO VA TUTTO FLUIDO DOPO E NON FAI ERRORI
 # COME LISCIARE UN FACTOR
 # one-hot dei fattori a troppi livelli ------------------------------------------------
@@ -25,20 +25,20 @@ print(fattori_high)
 
 # Per ciascuno, crea le indicatrici con contr.sum e sostituisce la colonna
 for (var in fattori_high) {
-  
+
   # Formula dinamica
   formula_var = as.formula(paste("~", var))
-  
+
   # Matrice delle indicatrici (contr.sum droppa l'ultimo livello)
   contrasts_list = setNames(list(contr.sum), var)
   ind_mat = model.matrix(formula_var, dati,
                          contrasts.arg = contrasts_list)[, -1, drop = FALSE]
-  
+
   # Nomi colonne: var_livello (tutti tranne l'ultimo)
   livelli       = levels(dati[[var]])
   livelli_usati = livelli[-length(livelli)]
   colnames(ind_mat) = paste0(var, "_", livelli_usati)
-  
+
   # Sostituisce il fattore originale con le indicatrici
   dati[[var]] = NULL
   dati = cbind(dati, ind_mat)
@@ -58,13 +58,10 @@ dati <- dati %>%
 id_risposta <- which(names(dati) == "y")
 
 
-
 # variabili numeriche e factor --------------------------------------------
 id_num <- setdiff(which(sapply(dati, function(x) is.numeric(x) | is.integer(x))), id_risposta)
 id_factor <- which(sapply(dati, is.factor))
 id_factor <- id_factor[!names(id_factor) %in% names(dati)[id_risposta]]
-
-
 
 
 # Stima/verifica ----------------------------------------------------------
@@ -78,17 +75,10 @@ rm(dati)
 gc()
 
 
-# Salvataggio dati non standardizzati e matrici design originali ----------
+# Salvataggio dati non standardizzati (per le matrici design originali,
+# vedi sotto: richiedono Y e contrasts_list, definiti più avanti) ---------
 sss_raw <- sss
 vvv_raw <- vvv
-# Matrici design non standardizzate
-m0_sum0_raw  <- lm(Y ~ . - y, data = sss_raw, contrasts = contrasts_list)
-X_sum0_raw   <- model.matrix(m0_sum0_raw)[, -1]
-XXv_sum0_raw <- model.matrix(
-  update(formula(m0_sum0_raw), NULL ~ . - y),
-  data = vvv_raw,
-  contrasts.arg = contrasts_list
-)[, -1]
 
 
 # Standardizzazione -------------------------------------------------------
@@ -110,13 +100,11 @@ print_table(table(sss$y))
 table(vvv$y)
 
 
-
 # modalita in sss e vvv ---------------------------------------------------
 
 check <- check_factor_levels(sss,vvv)
 check$all_factors_match   # TRUE allora va bene
 check$details             # dettagli per colonna
-
 
 
 # errore ------------------------------------------------------------------
@@ -133,12 +121,11 @@ conf_mat_list <- list()
 
 # risposta con indicatrici ------------------------------------------------
 
-#carico la libreria nnet in cui c'e' il comando class.ind che crea le 
+#carico la libreria nnet in cui c'e' il comando class.ind che crea le
 # variabili indicatrici per le modalità della risposta
 library(nnet)
 Y = class.ind(sss$y) # tengo fuori dall' insieme di stima senno sicuro me
 # la dimentico e la uso come regressore
-
 
 
 # creazione di sottinsiemi di righe di insieme di  convalida --------------
@@ -172,18 +159,17 @@ class_lm = apply(pr_lm, 1, which.max)
 err_lm = ce(class_lm, vvv$y)
 class_lm_fact = factor(levels(sss$y)[class_lm], levels = levels(sss$y))
 conf_mat_list[["Lineare multivariato - step"]] <- table(Previsto = class_lm_fact, Osservato = vvv$y)
-errori <- data.frame("modello" = character(),  "errore" = numeric())
 errori <- rbind(errori, data.frame(modello = "Lineare multivariato - step", errore = err_lm))
 errori
 
 
-# Contrasti a somma zero 
+# Contrasti a somma zero
 contrasts_list <- setNames(
   lapply(names(id_factor), function(v) contr.sum(nlevels(dati[[v]]))),
   names(id_factor)
 )
 
-# Ri-stima i modelli finali con contr.sum 
+# Ri-stima i modelli finali con contr.sum
 m_lin_sum0 <- lapply(1:n_levels_y, function(k) {
   f <- formula(m_lin[[k]])
   lm(f, data = sss, contrasts = contrasts_list)
@@ -191,8 +177,14 @@ m_lin_sum0 <- lapply(1:n_levels_y, function(k) {
 
 lapply(m_lin_sum0, summary)
 
-
-
+# Matrici design non standardizzate (ora che Y e contrasts_list esistono) --
+m0_sum0_raw  <- lm(Y ~ . - y, data = sss_raw, contrasts = contrasts_list)
+X_sum0_raw   <- model.matrix(m0_sum0_raw)[, -1]
+XXv_sum0_raw <- model.matrix(
+  update(formula(m0_sum0_raw), NULL ~ . - y),
+  data = vvv_raw,
+  contrasts.arg = contrasts_list
+)[, -1]
 
 
 # modello multinomiale stepwise -------------------------------------------
@@ -219,9 +211,6 @@ m_multi_sum0 <- multinom(formula_step, data = sss, maxit = 200,
 summary(m_multi_sum0)
 
 
-
-
-
 # modello baseline category logit -------------------------------------------------
 
 # multivariate logistic regression model
@@ -237,7 +226,7 @@ levels(sss$y) # ultima modalita è il riferimento
 pr_mnl = predict(mnl_step, type = "resp", vvv)
 pr_mnl=apply(pr_mnl, 1, which.max)
 err_mnl <- ce(pr_mnl, vvv$y)
-errori <- rbind(errori, data.frame(modello = "Regressione logistica multivariata - step", 
+errori <- rbind(errori, data.frame(modello = "Regressione logistica multivariata - step",
                                    errore = err_mnl))
 errori
 pr_mnl_fact = factor(levels(sss$y)[pr_mnl], levels = levels(sss$y))
@@ -248,9 +237,6 @@ m_mnl_sum0 <- vglm(formula_step, data = sss, family = multinomial,
 coef(m_mnl_sum0, matrix = TRUE)
 
 
-
-
-
 # lda ---------------------------------------------------------------------
 
 library(MASS)
@@ -259,7 +245,7 @@ ridotto.var = as.formula(m_multi)
 m_lda = lda(ridotto.var, data=sss)
 pr_lda  = predict(m_lda, newdata=vvv)
 err_lda <- ce(pr_lda$class, vvv$y)
-errori <- rbind(errori, data.frame(modello = "LDA", 
+errori <- rbind(errori, data.frame(modello = "LDA",
                                    errore = err_lda))
 errori
 conf_mat_list[["LDA"]] <- table(Previsto = pr_lda$class, Osservato = vvv$y)
@@ -268,15 +254,13 @@ conf_mat_list[["LDA"]] <- table(Previsto = pr_lda$class, Osservato = vvv$y)
 # QDA ---------------------------------------------------------------------
 
 # occhio che la qda non stima se c'è perfetta collinearità
-m_qda = qda(y~., sss) 
+m_qda = qda(y~., sss)
 pr_qda = predict(m_qda, vvv)
 (err_qda = ce(pr_qda$class, vvv$y))
 # POSSIBILE ERROR: se rank deficiency in group ... allora una variabile non varia
 # all'interno di una categoria della risposta, quindi non stimabile Sigma.
 conf_mat_list[["QDA"]] <- table(Previsto = pr_qda$class, Osservato = vvv$y)
 errori <- rbind(errori, data.frame(modello = "QDA", errore = err_qda))
-
-
 
 
 # lasso ------------------------------------------------------------------
@@ -333,17 +317,11 @@ pr_lasso_v_s0 <- lapply(m_lasso_sum0, predict,
                         newx = XXv_sum0, s = l_best_s0)
 pr_class_v_s0 <- apply(do.call(cbind, pr_lasso_v_s0), 1, which.max)
 err_lasso <- ce(pr_class_v_s0, vvv$y)
-errori <- rbind(errori, data.frame(modello = "Lasso", 
+errori <- rbind(errori, data.frame(modello = "Lasso",
                                    errore = err_lasso))
 errori
 pr_lasso_fact = factor(levels(sss$y)[pr_class_v_s0], levels = levels(sss$y))
 conf_mat_list[["Lasso"]] <- table(Previsto = pr_lasso_fact, Osservato = vvv$y)
-
-
-
-
-
-
 
 
 # lasso per risposte binomiali --------------------------------------------
@@ -400,7 +378,7 @@ coef_multi <- extract_lasso_coefs_multi(
   s            = l_best_logit_s0,
   class_names  = levels(sss$y),
   top_k = 10
-  
+
 )
 
 # Visualizza
@@ -411,8 +389,6 @@ coef_multi %>%
   group_by(variabile) %>%
   summarise(n_classi = n(), abs_medio = mean(abs_coefficiente)) %>%
   arrange(desc(n_classi), desc(abs_medio))
-
-
 
 
 # mars --------------------------------------------------------------------
@@ -505,12 +481,9 @@ df_long <- pivot_longer(data.frame(X = valori_x, prob_predette), cols = -X)
 
 ggplot(df_long, aes(x = X, y = value, color = name)) +
   geom_line(size = 1.2) +
-  labs(x = nome_cov, y = "Probabilità Predetta", color = "Categoria", 
+  labs(x = nome_cov, y = "Probabilità Predetta", color = "Categoria",
        title = paste("Probabilità rispetto a", nome_cov)) +
   theme_minimal() + theme(legend.position = "bottom")
-
-
-
 
 
 # modello additivo --------------------------------------------------------
@@ -518,7 +491,7 @@ ggplot(df_long, aes(x = X, y = value, color = name)) +
 # stimare un modello multilogit additivo con backfitting è computazionalmente
 # molto oneroso, ma se vuoi farlo:
 
-gam_add = F # richiede molto tempo, possiamo stimare direttamente il modello sulle variabili 
+gam_add = F # richiede molto tempo, possiamo stimare direttamente il modello sulle variabili
 # selezionate dalla regressione multinomiale
 if(gam_add){
   #variabili quantitative e qualitative, separate
@@ -527,14 +500,14 @@ if(gam_add){
   cat = cat[-5] # levo diagnosi
   names(num) # Aggiungo accesso, come numerica
   ll = sprintf("s(%s, df = 3)", c(names(num), "accesso"))
-  
+
   f_gam = paste0("diagnosi~", paste0(ll, collapse = "+"), "+", paste0(names(cat), collapse = "+"))
   f_gam
   library(VGAM)
-  
+
   # Ci mette molto e non e' presente step. Potrebbe aver senso utilizzare le variabili selezionate dai metodi sopra
   m_gam = vgam(as.formula(f_gam), family=multinomial, data=sss, bf.maxit = 100, maxit = 100, trace = T)
-  
+
   #summary(vg7) #molto lungo
   #par(mfrow=c(5,4))
   #plot(m_gam, se=T)
@@ -546,7 +519,7 @@ if(gam_add){
   errori
 }
 
-# oppure proviamo un modello additivo con spline lineare, scelto tramite 
+# oppure proviamo un modello additivo con spline lineare, scelto tramite
 # aic
 m_add = polyclass(
   sss$y[cb1],
@@ -566,16 +539,14 @@ pr_add_fact = factor(levels(sss$y)[pr_add], levels = levels(sss$y))
 conf_mat_list[["add"]] <- table(Previsto = pr_add_fact, Osservato = vvv$y)
 
 
-
-
 # albero ------------------------------------------------------------------
 
 library(tree)
-m_treeL = tree(y ~ ., data=sss[cb1,], 
+m_treeL = tree(y ~ ., data=sss[cb1,],
                control=tree.control(nobs=nrow(sss[cb1,]), minsize=2, mindev=0.0001)
                ,split="deviance")
 plot(m_treeL)
-prune.a= prune.tree(m_treeL, newdata=sss[cb2,]) 
+prune.a= prune.tree(m_treeL, newdata=sss[cb2,])
 plot(prune.a)
 J = prune.a$size[which.min(prune.a$dev)]
 abline(v=J,col="darkorchid",lwd=3)
@@ -584,16 +555,12 @@ plot(m_tree)
 #text(m_tree, pretty=0, srt = 90)
 text(m_tree, pretty=0, cex = 0.7)
 #
-pr_tree = predict(m_tree, newdata=vvv, type="class")  # senza l'id unità 
+pr_tree = predict(m_tree, newdata=vvv, type="class")  # senza l'id unità
 err_tree <- ce(pr_tree, vvv$y)
 errori <- rbind(errori, data.frame(modello = "albero",
                                    errore = err_tree))
 errori
 conf_mat_list[["albero"]] <- table(Previsto = pr_tree, Osservato = vvv$y)
-
-
-
-
 
 
 # rf ----------------------------------------------------------------------
@@ -619,7 +586,7 @@ legend('topright', col = 1:length(m_try), legend = m_try, lwd = 2)
 m=4 ## scegli qui
 trees= 10 * 40 #avevo plottato ogni 10
 
-m_rf = ranger(y~., sss, mtry = m, num.tree = trees, importance = 'permutation') 
+m_rf = ranger(y~., sss, mtry = m, num.tree = trees, importance = 'permutation')
 pr_rf = predict(m_rf, vvv)$pred
 
 err_rf <- ce(pr_rf, vvv$y)
@@ -644,7 +611,6 @@ ggplot(imp, aes(x = reorder(Variable, Importance), y = Importance)) +
   theme_minimal()
 
 
-
 # ------------------------------------------------------------------
 # CONFRONTO FINALE ERRORI E TABELLE DI CONFUSIONE
 # ------------------------------------------------------------------
@@ -664,26 +630,26 @@ cat("================================================================\n\n")
 for (nome in errori_ord$modello) {
   if (!is.null(conf_mat_list[[nome]])) {
     cat(sprintf("--- %s ---\n", nome))
-    
+
     tab <- conf_mat_list[[nome]]
     print(tab)
-    
+
     # Metriche aggregate dalla tabella di verifica
     n_tot     <- sum(tab)
     n_correct <- sum(diag(tab))
     acc       <- n_correct / n_tot
     cat(sprintf("Accuratezza globale su Verifica: %.4f\n", acc))
-    
+
     # Calcolo Precision e Recall basato su: Righe = Previsto, Colonne = Osservato
     # Precision = TP / (TP + FP) -> Totale di riga (quello che ho predetto)
     # Recall    = TP / (TP + FN) -> Totale di colonna (la classe reale)
-    prec_per_classe   <- diag(tab) / rowSums(tab)  
-    recall_per_classe <- diag(tab) / colSums(tab)  
-    
+    prec_per_classe   <- diag(tab) / rowSums(tab)
+    recall_per_classe <- diag(tab) / colSums(tab)
+
     # Sostituiamo eventuali NaN dovuti a divisioni per 0 se una classe non viene mai predetta
     prec_per_classe[is.nan(prec_per_classe)] <- 0
     recall_per_classe[is.nan(recall_per_classe)] <- 0
-    
+
     cat("Precision per classe (Valore Predittivo Positivo):\n")
     print(round(prec_per_classe, 4))
     cat("Recall per classe (Sensibilità):\n")
@@ -691,4 +657,3 @@ for (nome in errori_ord$modello) {
     cat("\n------------------------------------------------------------\n\n")
   }
 }
-

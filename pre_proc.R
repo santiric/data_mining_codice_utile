@@ -43,10 +43,6 @@ sel_df   <- df[, vars]         # df: standard
 sel_dt   <- dt[, ..vars]       # dt: richiede '..' per cercare la variabile esterna
 
 
-
-
-
-
 # ESPLORATIVA ---------------------------------------------------
 
 # --- Struttura e Dimensioni ---
@@ -80,10 +76,6 @@ plot_bar(dati)                   # Grafici a barre automatici per categoriche
 plot_histogram(dati)             # Istogrammi automatici per numeriche
 
 
-
-
-
-
 # SELEZIONE VARIABILI ---------------------------------
 
 # Selezione manuale da file metadati (creare colonna 0/1 da_tenere)
@@ -107,11 +99,6 @@ library(dplyr)
 dati_sub <- dati %>% select(starts_with("id_"), ends_with("_anno"), contains("target"))
 
 
-
-
-
-
-
 # MERGE -------------------------------------------------------------------
 
 # Left Join standard con selezione colonne (tiene tutte le righe del primo df)
@@ -129,10 +116,6 @@ dati_anti  <- dati %>% anti_join(dati2, by = "var_comune")  # Righe di dati1 NON
 # Unione diretta (Append)
 dati_righe <- bind_rows(dati, dati3) # Incolla sotto (allinea colonne per nome automaticamente)
 dati_col   <- bind_cols(dati, dati4) # Incolla a destra (richiede stesso numero di righe)
-
-
-
-
 
 
 # CONVERSIONI DI TIPO -----------------------------------------------------
@@ -162,12 +145,6 @@ dati$logica <- as.logical(dati$colonna_0_1) # converte 0/1, "TRUE"/"FALSE"
 dati <- type.convert(dati, as.is = FALSE) # rileva e assegna i tipi corretti
 
 
-
-
-
-
-
-
 # spacchetta --------------------------------------------------------------
 
 dati2 <- dati[,c(1:3,(4*1):(13*1))]
@@ -176,7 +153,6 @@ names(dati2)=c(names(dati2)[1:3],c("minus9","minus8"
                                            ,"minus4","minus3","minus2",
                                            "minus1"
                                            ,"y"))
-
 
 
 # comprimi ----------------------------------------------------------------
@@ -216,7 +192,7 @@ dati <- dati %>% mutate(across(where(is.numeric), ~ ifelse(.x %in% c(-99, 999), 
 
 # sostituire codici errore o placeholder di testo con na
 # usa as.character per non sballare i livelli dei factor e na_character_ per coerenza
-dati <- dati %>% mutate(across(where(~ is.character(.x) || is.factor(.x)), 
+dati <- dati %>% mutate(across(where(~ is.character(.x) || is.factor(.x)),
                                ~ ifelse(as.character(.x) %in% c("unknown", "vuoto", "null", "nd"), NA_character_, as.character(.x))))
 
 # imputazione rapida (mediana per numerici)
@@ -226,20 +202,20 @@ dati <- dati %>% mutate(across(where(is.numeric), ~ replace_na(.x, median(.x, na
 dati <- dati %>% mutate(across(where(is.factor), ~ forcats::fct_na_value_to_level(.x, level = "Mancante")))
 
 # discretizzare quantitative con troppi na
-quantilizza <- function(data, vars = NULL, n_quantili = 4, labels = NULL, 
+quantilizza <- function(data, vars = NULL, n_quantili = 4, labels = NULL,
                         suffisso = "_cat", na_label = "NA", sostituisci = TRUE) {
   if (is.null(vars)) vars <- names(data)[sapply(data, is.numeric)]
   if (is.null(labels)) labels <- paste0("Q", seq_len(n_quantili))
-  
+
   for (v in vars) {
     x <- data[[v]]
     breaks <- unique(quantile(x, probs = seq(0, 1, length.out = n_quantili + 1), na.rm = TRUE))
     if (length(breaks) < 2) next
-    
+
     cat_var <- cut(x, breaks = breaks, labels = labels[seq_len(length(breaks) - 1)], include.lowest = TRUE)
     levels(cat_var) <- c(levels(cat_var), na_label)
     cat_var[is.na(cat_var)] <- na_label
-    
+
     nome_output <- if (sostituisci) v else paste0(v, suffisso)
     data[[nome_output]] <- cat_var
   }
@@ -247,11 +223,6 @@ quantilizza <- function(data, vars = NULL, n_quantili = 4, labels = NULL,
 }
 col_soglia <- colSums(is.na(dati)) > 50
 dati[, col_soglia] <- quantilizza(dati[, col_soglia, drop = FALSE])
-
-
-
-
-
 
 
 # TRASFORMAZIONE STRINGHE E DATE ------------------------------------------
@@ -297,9 +268,9 @@ library(lubridate) # Caricato automaticamente anche con library(tidyverse)
 # H = Ora (sia formato 24h che 12h)
 # M = Minuto
 # S = Secondo
-# 
+#
 # FORMATI CHE QUESTO CODICE PUÒ GESTIRE AUTOMATICAMENTE:
-# parse_date_time() è tollerante sui separatori. 
+# parse_date_time() è tollerante sui separatori.
 # Gestisce indifferentemente trattini (-), barre (/), punti (.), spazi o la "T" degli ISO timestamp.
 # Esempi di stringhe compatibili con gli ordini impostati sotto:
 # - "2026-05-01 14:30:00"        (Standard internazionale Ymd HMS)
@@ -311,7 +282,7 @@ library(lubridate) # Caricato automaticamente anche con library(tidyverse)
 # Parsing flessibile della stringa in un oggetto Date-Time reale
 # (Riconosce da solo il formato provando gli ordini indicati da sinistra a destra)
 dt_pulito <- parse_date_time(
-  dati$to_timestamp, 
+  dati$to_timestamp,
   orders = c("Ymd HMS", "Ymd HM", "dmy HMS", "dmy HM", "mdy HMS", "Ymd")
 ) # to_timestamp contiene le date
 # Estrazione dei componenti numerici e rimozione della vecchia colonna
@@ -323,8 +294,6 @@ dati <- dati %>%
     ora    = hour(dt_pulito)
   ) %>%
   select(-to_timestamp)
-
-
 
 
 # RICODIFICA, CREAZIONE VARIABILI E DUMMY ENCODING ------------------------
@@ -360,7 +329,7 @@ dati$var_classi <- cut(dati$var_num, breaks = c(-Inf, 18, 65, Inf), labels = c("
 
 # da elenco categorie a dummy (es. "wifi | piscina")
 mod <- trimws(unlist(strsplit(as.character(dati$var), "|", fixed = TRUE)))
-mod_freq <- names(which(table(mod) > 7000)) 
+mod_freq <- names(which(table(mod) > 7000))
 for (m in mod_freq) {
   nome_col <- make.names(tolower(gsub(" ", "_", m)))
   dati[[nome_col]] <- as.numeric(grepl(m, dati$var, fixed = TRUE))
@@ -371,7 +340,6 @@ country_ids <- model.matrix(~var, dati)
 dati <- cbind(dati, country_ids)
 dati$var <- NULL
 dati$`(Intercept)` <- NULL
-
 
 
 # PRINT RISPOSTA E DATASET ----------------------------------------------------------
@@ -400,8 +368,6 @@ print_table(table(dati$var), title = "Risposta:")
 
 # printa dataframe post preproc
 knitr::kable(data.frame(`Nome Variabile` = names(dati), check.names = FALSE), format = "pipe")
-
-
 
 
 # SALVA ENV ---------------------------------------------------------------

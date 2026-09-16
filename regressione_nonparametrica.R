@@ -53,7 +53,6 @@ xgrid <- seq(min(sss$x), max(sss$x), length = 200)
 lines(xgrid, predict(m_loess_sv, data.frame(x = xgrid)), col = 2, lwd = 2)
 
 
-
 # ============================================================
 # SPLINE DI REGRESSIONE  (bs)
 # CV dei gradi di libertà (= nodi + 4 per cubica con intercetta)
@@ -108,7 +107,6 @@ err_bspl    <- errore(pred.bspl, vvv$y)
 cat("SV errore spline regressione:", err_bspl, "\n")
 
 
-
 # ============================================================
 # SMOOTH SPLINE
 # smooth.spline con CV interna (cv = TRUE → LOO-CV)
@@ -148,7 +146,6 @@ err_sspl   <- errore(pred.sspl, vvv$y)
 cat("SV errore smooth spline:", err_sspl, "\n")
 
 
-
 # ============================================================
 # LISCIATORE BIVARIATO  (sm.regression)
 # solo per pochi regressori quantitativi; h scelto via plug-in interno
@@ -173,7 +170,6 @@ cat("SV errore sm.regression bivariato:", err_sm, "\n")
 
 # Grafico eslorativo (griglia interna, senza eval.points)
 sm.regression(X_sm, sss$y, xlab = "x1", ylab = "x2", zlab = "y")
-
 
 
 # ============================================================

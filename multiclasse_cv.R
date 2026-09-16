@@ -7,12 +7,12 @@ library(tidyverse)
 dati <- dati %>%
   mutate(across(where(is.character), as.factor))
 
-# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE 
+# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE
 # ANCHE SE SONO 0/1, IN QUESTO MODO VA TUTTO FLUIDO DOPO E NON FAI ERRORI
 # COME LISCIARE UN FACTOR
 
 
-# MEGLIO NON AVERE VARIABILI CON TROPPE MODALITÀ, POI È UN CASINO SE ALCUNE 
+# MEGLIO NON AVERE VARIABILI CON TROPPE MODALITÀ, POI È UN CASINO SE ALCUNE
 # VARIABILI NEL FOLD DI VERIFICA HANNO MODALITÀ DIVERSE DA QUELLE NELLA STIMA.
 
 # Variabile risposta ------------------------------------------------------
@@ -34,20 +34,20 @@ print(fattori_high)
 
 # Per ciascuno, crea le indicatrici con contr.sum e sostituisce la colonna
 for (var in fattori_high) {
-  
+
   # Formula dinamica
   formula_var = as.formula(paste("~", var))
-  
+
   # Matrice delle indicatrici (contr.sum droppa l'ultimo livello)
   contrasts_list = setNames(list(contr.sum), var)
   ind_mat = model.matrix(formula_var, dati,
                          contrasts.arg = contrasts_list)[, -1, drop = FALSE]
-  
+
   # Nomi colonne: var_livello (tutti tranne l'ultimo)
   livelli       = levels(dati[[var]])
   livelli_usati = livelli[-length(livelli)]
   colnames(ind_mat) = paste0(var, "_", livelli_usati)
-  
+
   # Sostituisce il fattore originale con le indicatrici
   dati[[var]] = NULL
   dati = cbind(dati, ind_mat)
@@ -69,9 +69,6 @@ id_factor <- which(sapply(dati, is.factor))
 id_factor <- id_factor[!names(id_factor) %in% names(dati)[id_risposta]]
 
 
-
-
-
 # rinomina ----------------------------------------------------------------
 
 
@@ -87,12 +84,6 @@ print(id_num)
 
 sss[, id_num] = scale(sss[, id_num])
 
-
-source("utils.R")
-library(tidyverse)
-
-source("utils.R")
-library(tidyverse)
 
 # ==============================================================================
 # SETUP GENERALE
@@ -206,22 +197,22 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
   Y_tr  <- class.ind(train$y)
-  
+
   # Stima K modelli lineari con step (forward) su train
   m_lin_k <- lapply(1:K, function(j)
     step(lm(Y_tr[, j] ~ . - y, data = train,
             contrasts = contrasts_list),
          direction = "both", trace = 0)
   )
-  
+
   # Previsioni: matrice n_test x K
   pr_mat <- do.call(cbind, lapply(m_lin_k, predict, newdata = test))
   classe  <- livelli[apply(pr_mat, 1, which.max)]
-  
+
   cv_preds$lm_multi[id_test] <- classe
   metrics_folds_lm_multi[[k]] <- ce(classe, test$y)
   aggiungi_conf("Lineare multivariato step", classe, test$y)
@@ -259,15 +250,15 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_multi0_k <- multinom(y ~ ., data = train, maxit = 200, trace = FALSE)
   m_multi_k  <- step(m_multi0_k, trace = FALSE)
-  
+
   classe <- predict(m_multi_k, newdata = test, type = "class")
-  
+
   cv_preds$multinomiale[id_test] <- as.character(classe)
   metrics_folds_multi[[k]] <- ce(classe, test$y)
   aggiungi_conf("Multinomiale step", classe, test$y)
@@ -302,18 +293,18 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_vglm0_k  <- vglm(y ~ ., data = train, family = multinomial)
   m_vglm_k   <- step4vglm(m_vglm0_k)
   formula_k  <- formula(m_vglm_k)
   m_vglm_fit <- vglm(formula_k, data = train, family = multinomial)
-  
+
   pr_mat <- predict(m_vglm_fit, newdata = test, type = "response")
   classe  <- livelli[apply(pr_mat, 1, which.max)]
-  
+
   cv_preds$vglm_step[id_test] <- classe
   metrics_folds_vglm[[k]] <- ce(classe, test$y)
   aggiungi_conf("Baseline category logit step", classe, sss$y[id_test])
@@ -351,13 +342,13 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_lda_k <- lda(formula_lda, data = train)
   classe   <- predict(m_lda_k, newdata = test)$class
-  
+
   cv_preds$lda[id_test] <- as.character(classe)
   metrics_folds_lda[[k]] <- ce(classe, test$y)
   aggiungi_conf("LDA", classe, test$y)
@@ -386,18 +377,18 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_qda_k <- tryCatch(
     qda(formula_lda, data = train),
     error = function(e) { cat("QDA errore fold", k, ":", e$message, "\n"); NULL }
   )
   if (is.null(m_qda_k)) next
-  
+
   classe <- predict(m_qda_k, newdata = test)$class
-  
+
   cv_preds$qda[id_test] <- as.character(classe)
   metrics_folds_qda[[k]] <- ce(classe, test$y)
   aggiungi_conf("QDA", classe, test$y)
@@ -435,28 +426,28 @@ n_lam_ll <- length(lambda_seq_lasso_lin)
 
 metrics_folds_lasso_lin <- vector("list", n_fold)
 if (!"lasso_lin" %in% names(cv_preds)) cv_preds$lasso_lin <- NA_character_
-lambda_per_fold_lasso_lin <- numeric(n_fold) 
+lambda_per_fold_lasso_lin <- numeric(n_fold)
 
 for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   # Subsampling interno per selezione lambda (2/3 stima, 1/3 verifica)
   set.seed(k)
   cb1_k <- sample(id_train, floor(2/3 * length(id_train)))
   cb2_k <- setdiff(id_train, cb1_k)
-  
+
   X_cb1 <- X_sum0[cb1_k, ]; Y_cb1 <- Y_full[cb1_k, ]
   X_cb2 <- X_sum0[cb2_k, ]; Y_cb2 <- Y_full[cb2_k, ]
   X_tst <- X_sum0[id_test, ]
-  
+
   # Stima K modelli lasso su cb1
   fits_k <- lapply(1:K, function(j)
     glmnet(X_cb1, Y_cb1[, j], alpha = 1,
            lambda = lambda_seq_lasso_lin)
   )
-  
+
   # Selezione lambda su cb2
   err_cb2 <- sapply(lambda_seq_lasso_lin, function(lam) {
     pr_mat <- do.call(cbind, lapply(fits_k, predict, newx = X_cb2, s = lam))
@@ -465,12 +456,12 @@ for (k in 1:n_fold) {
   })
   lambda_k <- lambda_seq_lasso_lin[which.min(err_cb2)]
   lambda_per_fold_lasso_lin[k] <- lambda_k
-  
+
   # Predici su test
   pr_mat_tst <- do.call(cbind, lapply(fits_k, predict,
                                       newx = X_tst, s = lambda_k))
   classe <- livelli[apply(pr_mat_tst, 1, which.max)]
-  
+
   cv_preds$lasso_lin[id_test] <- classe
   metrics_folds_lasso_lin[[k]] <- ce(classe, sss$y[id_test])
   aggiungi_conf("Lasso lineare", classe, sss$y[id_test])
@@ -519,7 +510,6 @@ coef_multi_lasso_lin %>%
   arrange(desc(n_classi), desc(abs_medio))
 
 
-
 # ==============================================================================
 # 7. LASSO LOGISTICO (K glmnet binomiali separati)
 # ==============================================================================
@@ -541,20 +531,20 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   set.seed(k)
   cb1_k <- sample(id_train, floor(2/3 * length(id_train)))
   cb2_k <- setdiff(id_train, cb1_k)
-  
+
   X_cb1 <- X_sum0[cb1_k, ]; Y_cb1 <- Y_full[cb1_k, ]
   X_cb2 <- X_sum0[cb2_k, ]
   X_tst <- X_sum0[id_test, ]
-  
+
   fits_k <- lapply(1:K, function(j)
     glmnet(X_cb1, as.numeric(Y_cb1[, j]), alpha = 1, family = "binomial",
            lambda = lambda_seq_lasso_logit)
   )
-  
+
   err_cb2 <- sapply(lambda_seq_lasso_logit, function(lam) {
     pr_mat <- do.call(cbind, lapply(fits_k, predict,
                                     newx = X_cb2, s = lam, type = "response"))
@@ -562,12 +552,12 @@ for (k in 1:n_fold) {
   })
   lambda_k <- lambda_seq_lasso_logit[which.min(err_cb2)]
   lambda_per_fold_lasso_logit[k] <- lambda_k             # <-- salva
-  
+
   pr_mat_tst <- do.call(cbind, lapply(fits_k, predict,
                                       newx = X_tst, s = lambda_k,
                                       type = "response"))
   classe <- livelli[apply(pr_mat_tst, 1, which.max)]
-  
+
   cv_preds$lasso_logit[id_test] <- classe
   metrics_folds_lasso_logit[[k]] <- ce(classe, sss$y[id_test])
   aggiungi_conf("Lasso logistico", classe, sss$y[id_test])
@@ -620,18 +610,18 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   set.seed(k)
   cb1_k <- sample(id_train, floor(2/3 * length(id_train)))
   cb2_k <- setdiff(id_train, cb1_k)
-  
+
   m_mars_k <- polyclass(
     sss$y[cb1_k],
     cov   = X_sum0[cb1_k, ],
     tdata = sss$y[cb2_k],
     tcov  = X_sum0[cb2_k, ]
   )
-  
+
   classe <- cpolyclass(m_mars_k, cov = X_sum0[id_test, ])
   cv_preds$mars[id_test] <- as.character(classe)
   metrics_folds_mars[[k]] <- ce(classe, sss$y[id_test])
@@ -695,10 +685,9 @@ df_long <- pivot_longer(data.frame(X = valori_x, prob_predette), cols = -X)
 
 ggplot(df_long, aes(x = X, y = value, color = name)) +
   geom_line(size = 1.2) +
-  labs(x = nome_cov, y = "Probabilità Predetta", color = "Categoria", 
+  labs(x = nome_cov, y = "Probabilità Predetta", color = "Categoria",
        title = paste("Probabilità rispetto a", nome_cov)) +
   theme_minimal() + theme(legend.position = "bottom")
-
 
 
 # ==============================================================================
@@ -712,11 +701,11 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   set.seed(k)
   cb1_k <- sample(id_train, floor(2/3 * length(id_train)))
   cb2_k <- setdiff(id_train, cb1_k)
-  
+
   m_add_k <- polyclass(
     sss$y[cb1_k],
     cov      = X_sum0[cb1_k, ],
@@ -724,9 +713,9 @@ for (k in 1:n_fold) {
     tcov     = X_sum0[cb2_k, ],
     additive = TRUE
   )
-  
+
   classe <- cpolyclass(m_add_k, cov = X_sum0[id_test, ])
-  
+
   cv_preds$additivo[id_test] <- as.character(classe)
   metrics_folds_add[[k]] <- ce(classe, sss$y[id_test])
   aggiungi_conf("Additivo (polyclass add)", classe, sss$y[id_test])
@@ -755,7 +744,7 @@ summary(m_add)
 
 # 1. IMPOSTAZIONI
 cov_idx  <- 3                  # Scegli l'indice della covariata da plottare
-nome_cov <- colnames(X_sum0)[cov_idx] 
+nome_cov <- colnames(X_sum0)[cov_idx]
 # nome_cov <- "MioNomeAValore" # <--- Togli il '#' e scrivi qui il nome se X_sum0 non ha intestazioni
 
 # 2. GENERAZIONE DATI E CALCOLO PROBABILITÀ
@@ -773,11 +762,11 @@ ggplot(df_long, aes(x = X, y = value, color = name)) +
   geom_line(size = 1.2) +
   labs(
     title = paste("Modello Additivo: Probabilità rispetto a", nome_cov),
-    x = nome_cov, 
-    y = "Probabilità Predetta", 
+    x = nome_cov,
+    y = "Probabilità Predetta",
     color = "Categoria"
   ) +
-  theme_minimal() + 
+  theme_minimal() +
   theme(legend.position = "bottom")
 
 
@@ -799,15 +788,15 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   train <- sss[id_train, ]
   test  <- sss[id_test,  ]
-  
+
   m_tree_k <- tree(y ~ ., data = train, split = "deviance",
                    control = tree.control(nobs    = nrow(train),
                                           minsize = 2,
                                           mindev  = 0.0001))
-  
+
   # Errore per ogni dimensione di potatura
   err_albero_mat[k, ] <- sapply(dim_albero, function(l) {
     t_pot <- tryCatch(prune.tree(m_tree_k, best = l),
@@ -834,20 +823,20 @@ abline(v = dim_albero[B], col = 2, lwd = 2)
 if (!"tree" %in% names(cv_preds)) cv_preds$tree <- NA_character_
 
 # CICLO FOR SOLO PER SALVERE I RISULTATI DELL'OTTIMO, STIAMO SEMPRE
-# USANDO LA STESSA CV SIA PER SCEGLIERE LA PROFONDITÁ CHE PER 
+# USANDO LA STESSA CV SIA PER SCEGLIERE LA PROFONDITÁ CHE PER
 # STIMARE L'ERRORE.
 for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   m_tree_k <- tree(y ~ ., data = sss[id_train, ], split = "deviance",
                    control = tree.control(nobs    = length(id_train),
                                           minsize = 2,
                                           mindev  = 0.0001))
   m_tree_pot <- prune.tree(m_tree_k, best = dim_albero[B])
   classe <- predict(m_tree_pot, newdata = sss[id_test, ], type = "class")
-  
+
   cv_preds$tree[id_test] <- as.character(classe)
   metrics_folds_tree[[k]] <- ce(classe, sss$y[id_test])
   aggiungi_conf("Albero", classe, sss$y[id_test])
@@ -888,10 +877,10 @@ for (k in 1:n_fold) {
   id_test  <- cv_id_sb[, k]
   id_train <- as.vector(cv_id[, -k])
   id_train <- id_train[!is.na(id_train)]
-  
+
   perf_fold      <- numeric(n_mtry)
   classe_fold_list <- matrix(NA_character_, nrow = length(id_test), ncol = n_mtry)
-  
+
   for (m in seq_along(m_try_seq)) {
     fit_k <- ranger(y ~ ., data = sss[id_train, ],
                     mtry     = m_try_seq[m],
@@ -901,17 +890,17 @@ for (k in 1:n_fold) {
     perf_fold[m] <- ce(classe_m, sss$y[id_test])
     classe_fold_list[, m] <- as.character(classe_m)
   }
-  
+
   perf_mat_rf[id_test, ] <- matrix(rep(perf_fold, each = length(id_test)),
                                    nrow = length(id_test))
-  
+
   # mtry ottimo per questo fold = minimizza errore
   best_m_idx <- which.min(perf_fold)
   classe_best <- classe_fold_list[, best_m_idx]
-  
+
   cv_preds$rf[id_test] <- classe_best
   metrics_folds_rf[[k]] <- ce(classe_best, sss$y[id_test])
-  aggiungi_conf("Random Forest", classe, sss$y[id_test])
+  aggiungi_conf("Random Forest", classe_best, sss$y[id_test])
   cat("rf fold", k, "| mtry ottimo:", m_try_seq[best_m_idx], "\n")
 }
 
@@ -980,23 +969,23 @@ cat("================================================================\n\n")
 for (nome in errori_cv_ord$modello) {
   if (!is.null(conf_mat_list[[nome]])) {
     cat(sprintf("--- %s ---\n", nome))
-    
+
     tab <- conf_mat_list[[nome]]
     print(tab)
-    
+
     # Metriche aggregate dalla tabella cumulativa
     n_tot     <- sum(tab)
     n_correct <- sum(diag(tab))
     acc       <- n_correct / n_tot
-    
+
     # Precision, Recall per classe
     prec_per_classe   <- diag(tab) / colSums(tab)  # TP / (TP+FP) per colonna=osservato
     recall_per_classe <- diag(tab) / rowSums(tab)  # TP / (TP+FN) per riga=previsto
     # Nota: se Previsto=righe, Osservato=colonne:
-    # precision = TP/(TP+FP) = diag/colSums  (quanti osservati di classe k 
+    # precision = TP/(TP+FP) = diag/colSums  (quanti osservati di classe k
     #                                          sono stati predetti k)
     # recall    = TP/(TP+FN) = diag/rowSums  (dei predetti k, quanti erano k)
-    
+
     cat(sprintf("  Accuratezza: %.4f\n", acc))
     cat("  Recall per classe (sensitività):\n")
     print(round(recall_per_classe, 4))

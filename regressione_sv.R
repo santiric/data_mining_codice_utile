@@ -7,10 +7,10 @@ library(tidyverse)
 dati <- dati %>%
   mutate(across(where(is.character), as.factor))
 
-# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE 
+# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE
 # ANCHE SE SONO 0/1, IN QUESTO MODO VA TUTTO FLUIDO DOPO E NON FAI ERRORI
 # COME LISCIARE UN FACTOR
-# one-hot dei fattori a troppi livelli  ------------------------------------------------
+# one-hot dei fattori a troppi livelli ------------------------------------------------
 
 # Soglia per "troppe modalità"
 soglia_modalita = 32
@@ -25,20 +25,20 @@ print(fattori_high)
 
 # Per ciascuno, crea le indicatrici con contr.sum e sostituisce la colonna
 for (var in fattori_high) {
-  
+
   # Formula dinamica
   formula_var = as.formula(paste("~", var))
-  
+
   # Matrice delle indicatrici (contr.sum droppa l'ultimo livello)
   contrasts_list = setNames(list(contr.sum), var)
   ind_mat = model.matrix(formula_var, dati,
                          contrasts.arg = contrasts_list)[, -1, drop = FALSE]
-  
+
   # Nomi colonne: var_livello (tutti tranne l'ultimo)
   livelli       = levels(dati[[var]])
   livelli_usati = livelli[-length(livelli)]
   colnames(ind_mat) = paste0(var, "_", livelli_usati)
-  
+
   # Sostituisce il fattore originale con le indicatrici
   dati[[var]] = NULL
   dati = cbind(dati, ind_mat)
@@ -64,7 +64,6 @@ dati$y <- log(dati$y)
 dati$y <- pmax(0,dati$y)
 
 
-
 # variabili numeriche e factor --------------------------------------------
 
 id_num <- setdiff(which(sapply(dati, function(x) is.numeric(x) | is.integer(x))), id_risposta)
@@ -76,10 +75,10 @@ id_factor <- id_factor[!names(id_factor) %in% names(dati)[id_risposta]]
 # specifica min_cap e max_cap se la risposta è per definizione bounded
 errore <- function(pred, vero, tipo = "mse", min_cap = NULL, max_cap = NULL, pesi = NULL) {
   tipo <- match.arg(tipo, c("mae", "mse"))
-  
+
   if (!is.null(min_cap)) pred <- pmax(pred, min_cap)
   if (!is.null(max_cap)) pred <- pmin(pred, max_cap)
-  
+
   if (!is.null(pesi)) {
     pesi <- pesi / sum(pesi)  # normalizza a somma 1
     switch(tipo,
@@ -93,9 +92,6 @@ errore <- function(pred, vero, tipo = "mse", min_cap = NULL, max_cap = NULL, pes
     )
   }
 }
-
-
-
 
 
 # Stima/verifica ----------------------------------------------------------
@@ -179,7 +175,6 @@ m_step_sum0  <- lm(formula_step, data = sss, contrasts = ctr)
 summary(m_step_sum0)
 
 
-
 # Ridge -------------------------------------------------------------------
 library(glmnet)
 # 1.Parametrizzazione a somma 0:
@@ -193,7 +188,7 @@ make_contr.sum <- function(v, dd) {
 }
 ctr <- setNames(lapply(cat_vars, make_contr.sum, dd=sss), cat_vars)
 x <- model.matrix(~., data=sss[,-id_risposta],contrasts.arg = ctr)
-x.vvv <- model.matrix(~., data=vvv[,-id_risposta]) 
+x.vvv <- model.matrix(~., data=vvv[,-id_risposta])
 # se da problemi prova a rifare factor() sui factor, non va se ci sono livelli
 # in piu che non esistono
 
@@ -204,8 +199,6 @@ plot(m.ridge.cv)
 lambda.ottimo = m.ridge.cv$lambda.min
 pred.ridge.cv = predict(m.ridge.cv, newx=x.vvv[,-1],s=lambda.ottimo)
 err_ridge <- errore(pred.ridge.cv,vvv$y)
-
-
 
 
 # Lasso -----------------------------------------------------------------
@@ -241,7 +234,6 @@ err_lasso        <- errore(pred.lasso.cv, vvv$y)
 
 df <- extract_lasso_coefs(m.lasso.cv)
 plot_lasso_coefs(df)
-
 
 
 # Lasso con interazioni -------------------------------------------------------
@@ -289,10 +281,10 @@ plot_lasso_coefs(df)
 
 #usa aic
 library(gam)
-df_list = paste0("df=", 2:6) 
-# Selezione tra tutte le variabili 
+df_list = paste0("df=", 2:6)
+# Selezione tra tutte le variabili
 #gestisce i fattori in automatico
-gam_list = gam.scope(sss, response = id_risposta, 
+gam_list = gam.scope(sss, response = id_risposta,
                      smoother = "s", arg = df_list)
 gam_list
 gam_null = gam(y~1,data=sss)
@@ -332,7 +324,6 @@ plot(gam_full_sel,terms = c("s(Consumo_Annuo, df = 6)", "s(time, df = 4)"),se=T)
 rm(sss_sub)
 
 
-
 # Albero ------------------------------------------------------------------
 
 library(tree)
@@ -358,12 +349,10 @@ pred.tree    <- predict(m_tree_b, vvv)
 err_tree        <- errore(pred.tree, vvv$y)
 
 
-
-
 # MARS --------------------------------------------------------------------
 
-### non so perchè ma con i regressori standardizzati è molto instabile (penso dipenda
-# dalla scala della risposta ###
+### non so perchè ma con i regressori standardizzati è molto instabile
+# (penso dipenda dalla scala della risposta)
 
 library(polspline)
 
@@ -436,17 +425,13 @@ pred.mars = predict(m_mars, vvv[,-id_risposta])
 
 # 2 esp vs resp
 plot(m_mars, predictor1 = 4, predictor2 = 5, phi = 10, theta = 60)
-mtext(paste("predictor1 =", names(sss[,-id_risposta])[4], 
-            "| predictor2 =", names(sss[,-id_risposta])[5]), 
+mtext(paste("predictor1 =", names(sss[,-id_risposta])[4],
+            "| predictor2 =", names(sss[,-id_risposta])[5]),
       side = 1, line = 3, cex = 0.9)
 
 # 1 esp vs resp
 plot(m_mars, predictor1 = 4)
 title(sub = names(sss[,-id_risposta])[4], cex.sub = 1, font.sub = 2)
-
-
-
-
 
 
 # PPR ---------------------------------------------------------------------
@@ -460,7 +445,7 @@ cv_err <- numeric(length(nterms_grid))
 for (i in seq_along(nterms_grid)) {
   m <- nterms_grid[i]
   fold_err <- numeric(K)
-  
+
   for (k in 1:K) {
     train <- sss[folds != k, ]
     test  <- sss[folds == k, ]
@@ -478,12 +463,8 @@ plot(nterms_grid, cv_err, type = "b",
 abline(v = best_m, col = "red", lty = 2)
 
 m_ppr <- ppr(y ~ ., data = sss, nterms = best_m,sm.method = "gcvspline",gcvpen=2)
-pred.ppr = predict(m_ppr,newdata = vvv) 
+pred.ppr = predict(m_ppr,newdata = vvv)
 (err_ppr = errore(pred.ppr, vvv$y))
-
-
-
-
 
 
 # Random Forest -----------------------------------------------------------
@@ -497,7 +478,7 @@ cb2 = setdiff(1:NROW(sss), cb1)
 # per la regressione circa p/3
 # ntree=500
 # noi vogliamo convalidare l'iperaparametro mtry
-nvar=c(2,4,6) # attorno 
+nvar=c(2,4,6) # attorno
 ntree=200
 err_rf = matrix(NA,ntree,length(nvar))
 for(m in seq_along(nvar)){
@@ -517,11 +498,11 @@ ntree=100 #scegli dal grafico
 m_rf=randomForest(y~.,sss,mtry=m,ntree=ntree,importance=T)
 varImpPlot(m_rf)
 
-pred.rf = predict(m_rf,newdata = vvv) 
+pred.rf = predict(m_rf,newdata = vvv)
 (err_rf = errore(pred.rf, vvv$y))
 
 
-## se con tutti i dati troppo pesante: 
+## se con tutti i dati troppo pesante:
 library(randomForest)
 library(ranger)
 

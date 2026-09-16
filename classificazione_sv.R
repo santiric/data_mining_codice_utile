@@ -5,12 +5,9 @@ library(tidyverse)
 # per evitare errori successivi:
 
 dati <- dati %>%
-  mutate(across(where(is.character),factor))
+  mutate(across(where(is.character), factor))
 
-dati <- dati %>%
-  mutate(across(where(is.factor),factor))
-
-# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE 
+# CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE
 # ANCHE SE SONO 0/1, IN QUESTO MODO VA TUTTO FLUIDO DOPO E NON FAI ERRORI
 # COME LISCIARE UN FACTOR
 
@@ -29,20 +26,20 @@ print(fattori_high)
 
 # Per ciascuno, crea le indicatrici con contr.sum e sostituisce la colonna
 for (var in fattori_high) {
-  
+
   # Formula dinamica
   formula_var = as.formula(paste("~", var))
-  
+
   # Matrice delle indicatrici (contr.sum droppa l'ultimo livello)
   contrasts_list = setNames(list(contr.sum), var)
   ind_mat = model.matrix(formula_var, dati,
                          contrasts.arg = contrasts_list)[, -1, drop = FALSE]
-  
+
   # Nomi colonne: var_livello (tutti tranne l'ultimo)
   livelli       = levels(dati[[var]])
   livelli_usati = livelli[-length(livelli)]
   colnames(ind_mat) = paste0(var, "_", livelli_usati)
-  
+
   # Sostituisce il fattore originale con le indicatrici
   dati[[var]] = NULL
   dati = cbind(dati, ind_mat)
@@ -64,8 +61,7 @@ dati <- dati %>%
 #### y deve eddere numerica
 
 
-
-# tienila numerica, poi la rendi factor quando serve 
+# tienila numerica, poi la rendi factor quando serve
 
 # variabili numeriche e factor --------------------------------------------
 id_risposta <- which(names(dati) == "y")
@@ -95,14 +91,14 @@ id_factor <- id_factor[!names(id_factor) %in% names(dati)[id_risposta]]
 # ==============================================================================
 
 classification_metrics <- function(probs, truth, threshold = 0.5) {
-  
+
   # --- Validazione input ---
   stopifnot(
     "probs e truth devono avere la stessa lunghezza" = length(probs) == length(truth),
     "truth deve contenere solo 0/1 o FALSE/TRUE"    = all(truth %in% c(0, 1, TRUE, FALSE)),
     "threshold deve essere tra 0 e 1"               = threshold >= 0 & threshold <= 1
   )
-  
+
   # Se le probabilità escono dall'intervallo [0, 1] (es. output non calibrati
   # di certi modelli), le clippiamo all'intervallo valido.
   # pmax(0, x) porta a 0 i valori negativi, pmin(1, x) porta a 1 quelli > 1.
@@ -110,10 +106,10 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
   if (n_clipped > 0)
     message(sprintf("Attenzione: %d valore/i fuori da [0,1] cappato/i.", n_clipped))
   probs <- pmax(0, pmin(1, probs))
-  
+
   truth     <- as.integer(truth)
   predicted <- as.integer(probs >= threshold)  # classificazione dura alla soglia
-  
+
   # --- Confusion Matrix ---
   # La confusion matrix è la base di tutte le metriche successive.
   # Mette in relazione i valori predetti con quelli reali in 4 celle:
@@ -121,51 +117,51 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
   #                     Predetto POSITIVO   Predetto NEGATIVO
   #   Reale POSITIVO  |       TP           |       FN         |
   #   Reale NEGATIVO  |       FP           |       TN         |
-  
+
   TP <- sum(predicted == 1 & truth == 1)
   # True Positive: il modello predice positivo ed era davvero positivo.
-  
+
   TN <- sum(predicted == 0 & truth == 0)
   # True Negative: il modello predice negativo ed era davvero negativo.
-  
+
   FP <- sum(predicted == 1 & truth == 0)
   # False Positive (errore di tipo I / "falso allarme"):
   # il modello predice positivo ma era negativo.
   # Es. un test medico che segnala malattia in un paziente sano.
-  
+
   FN <- sum(predicted == 0 & truth == 1)
   # False Negative (errore di tipo II / "mancata rilevazione"):
   # il modello predice negativo ma era positivo.
   # Es. un test medico che non rileva la malattia in un paziente malato.
-  
+
   N <- length(truth)  # numero totale di osservazioni
-  
+
   # --- Accuracy ---
   # Proporzione di predizioni corrette sul totale.
   # Formula: (TP + TN) / N
   # Limite: fuorviante con classi sbilanciate (es. 95% negativi ->
   #         un modello che predice sempre 0 ha accuracy 0.95 senza imparare nulla).
   accuracy <- (TP + TN) / N
-  
+
   # --- Sensitivity (= Recall = True Positive Rate, TPR) ---
   # Tra tutti i casi realmente positivi, quanti ne rileva il modello?
   # Formula: TP / (TP + FN)
   # Alta sensitivity -> pochi falsi negativi. Fondamentale in diagnostica:
   # meglio fare un falso allarme che perdersi un caso reale.
   sensitivity <- if (TP + FN > 0) TP / (TP + FN) else NA
-  
+
   # --- Specificity (= True Negative Rate, TNR) ---
   # Tra tutti i casi realmente negativi, quanti vengono classificati correttamente?
   # Formula: TN / (TN + FP)
   # Alta specificity -> pochi falsi positivi. Importante quando un falso allarme
   # ha costi elevati (es. trattamenti invasivi o screening di massa).
   specificity <- if (TN + FP > 0) TN / (TN + FP) else NA
-  
+
   # --- Precision (necessaria per il calcolo di F1, non esposta direttamente) ---
   # Tra tutti i casi predetti positivi, quanti lo sono davvero?
   # Formula: TP / (TP + FP)
   precision <- if (TP + FP > 0) TP / (TP + FP) else NA
-  
+
   # --- F1 Score ---
   # Media armonica di precision e sensitivity (recall).
   # Formula: 2 * (precision * sensitivity) / (precision + sensitivity)
@@ -176,26 +172,26 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
   f1 <- if (!is.na(precision) && !is.na(sensitivity) &&
             (precision + sensitivity) > 0)
     2 * precision * sensitivity / (precision + sensitivity) else NA
-  
+
   # --- FPR (False Positive Rate = Tasso di Falsi Positivi) ---
   # Tra tutti i negativi reali, quanti vengono erroneamente classificati positivi?
   # Formula: FP / (FP + TN)  =  1 - specificity
   # È l'asse X della curva ROC. Un FPR alto significa molti falsi allarmi.
   fpr <- if (TN + FP > 0) FP / (FP + TN) else NA
-  
+
   # --- FNR (False Negative Rate = Tasso di Falsi Negativi) ---
   # Tra tutti i positivi reali, quanti vengono erroneamente classificati negativi?
   # Formula: FN / (FN + TP)  =  1 - sensitivity
   # Un FNR alto significa che il modello "si perde" molti positivi reali.
   fnr <- if (TP + FN > 0) FN / (TP + FN) else NA
-  
+
   # --- Output strutturato ---
   result <- list(
     threshold    = threshold,
     n            = N,
-    
+
     confusion_matrix = list(TP = TP, TN = TN, FP = FP, FN = FN),
-    
+
     accuracy    = accuracy,
     sensitivity = sensitivity,  # = recall = TPR
     specificity = specificity,  # = TNR
@@ -203,7 +199,7 @@ classification_metrics <- function(probs, truth, threshold = 0.5) {
     fpr         = fpr,          # tasso di falsi positivi = 1 - specificity
     fnr         = fnr           # tasso di falsi negativi = 1 - sensitivity
   )
-  
+
   class(result) <- "classification_metrics"
   return(result)
 }
@@ -214,11 +210,11 @@ print.classification_metrics <- function(x, ...) {
   cat(sprintf(" Metriche di Classificazione  (soglia = %.2f)\n", x$threshold))
   cat("══════════════════════════════════════════\n")
   cat(sprintf(" Osservazioni nell'insieme di verifica : %d\n", x$n))
-  
+
   cat("\n── Confusion Matrix ──────────────────────\n")
   cat(sprintf("  TP = %4d   FP = %4d\n", x$confusion_matrix$TP, x$confusion_matrix$FP))
   cat(sprintf("  FN = %4d   TN = %4d\n", x$confusion_matrix$FN, x$confusion_matrix$TN))
-  
+
   fmt <- function(v) if (is.na(v)) "     NA" else sprintf("%7.4f", v)
   cat("\n── Metriche ──────────────────────────────\n")
   cat(sprintf("  Accuracy        : %s\n", fmt(x$accuracy)))
@@ -230,9 +226,6 @@ print.classification_metrics <- function(x, ...) {
   cat("══════════════════════════════════════════\n")
   invisible(x)
 }
-
-
-
 
 
 # Stima/verifica ----------------------------------------------------------
@@ -296,7 +289,6 @@ print_table(table(sss$y))
 table(vvv$y)
 
 
-
 # modalita in sss e vvv ---------------------------------------------------
 
 check <- check_factor_levels(sss,vvv)
@@ -331,10 +323,9 @@ m_step_sum0  <- lm(formula_step, data = sss, contrasts = ctr)
 summary(m_step_sum0)
 
 
-
 # Sottocampionamento ------------------------------------------------------
 
-# se alcuni modelli ci mettono troppo puoi sottocampionare, gia che ci sei 
+# se alcuni modelli ci mettono troppo puoi sottocampionare, gia che ci sei
 # fallo bilanciando le classi
 
 set.seed(1)
@@ -373,7 +364,7 @@ m_null = glm(factor(y)~1,sss,family="binomial")
 m_step_logit = step(m_null, scope = scope, direction = "forward", trace = 1)
 summary(m_step_logit)
 p.step_logit = predict(m_step_logit, vvv,type="response")
-(err_step_logit <- classification_metrics(p.step, vvv$y))
+(err_step_logit <- classification_metrics(p.step_logit, vvv$y))
 
 
 # param a somma 0
@@ -391,8 +382,6 @@ m_step_logit_sum0  <- lm(formula_step, data = sss, contrasts = ctr)
 summary(m_step_logit_sum0)
 
 
-
-
 # Ridge - modello lineare -------------------------------------------------------------------
 library(glmnet)
 # 1.Parametrizzazione a somma 0:
@@ -406,7 +395,7 @@ make_contr.sum <- function(v, dd) {
 }
 ctr <- setNames(lapply(cat_vars, make_contr.sum, dd=sss), cat_vars)
 x <- model.matrix(y~., data=sss,contrasts.arg = ctr)
-x.vvv <- model.matrix(y~., data=vvv,contrasts.arg = ctr) 
+x.vvv <- model.matrix(y~., data=vvv,contrasts.arg = ctr)
 
 # se da problemi prova a rifare factor() sui factor, non va se ci sono livelli
 # in piu che non esistono
@@ -435,14 +424,14 @@ make_contr.sum <- function(v, dd) {
 }
 ctr <- setNames(lapply(cat_vars, make_contr.sum, dd=sss), cat_vars)
 x <- model.matrix(factor(y)~., data=sss,contrasts.arg = ctr)
-x.vvv <- model.matrix(factor(y)~., data=vvv,contrasts.arg = ctr) 
+x.vvv <- model.matrix(factor(y)~., data=vvv,contrasts.arg = ctr)
 
 # se da problemi prova a rifare factor() sui factor, non va se ci sono livelli
 # in piu che non esistono
 
 
 set.seed(1)
-m.ridge_logit.cv=cv.glmnet(x[,-1], factor(sss$y), 
+m.ridge_logit.cv=cv.glmnet(x[,-1], factor(sss$y),
                            alpha=0,lambda.min.ratio=1e-10,
                            family="binomial",
                            trace.it = TRUE) #togliamo intercetta dalla matrice del disegno
@@ -452,7 +441,6 @@ pred.ridge_logit.cv = predict(m.ridge_logit.cv, newx=x.vvv[,-1],s=lambda.ottimo,
                               type="response")
 err_ridge_logit <- classification_metrics(pred.ridge_logit.cv,vvv$y)
 print.classification_metrics(err_ridge_logit)
-
 
 
 # LASSO - modello lineare ----------------------------------------------------
@@ -469,7 +457,7 @@ make_contr.sum <- function(v, dd) {
 }
 ctr <- setNames(lapply(cat_vars, make_contr.sum, dd=sss), cat_vars)
 x <- model.matrix(y~., data=sss,contrasts.arg = ctr)
-x.vvv <- model.matrix(y~., data=vvv,contrasts.arg = ctr) 
+x.vvv <- model.matrix(y~., data=vvv,contrasts.arg = ctr)
 
 # se da problemi prova a rifare factor() sui factor, non va se ci sono livelli
 # in piu che non esistono
@@ -504,14 +492,14 @@ make_contr.sum <- function(v, dd) {
 }
 ctr <- setNames(lapply(cat_vars, make_contr.sum, dd=sss), cat_vars)
 x <- model.matrix(factor(y)~., data=sss,contrasts.arg = ctr)
-x.vvv <- model.matrix(factor(y)~., data=vvv,contrasts.arg = ctr) 
+x.vvv <- model.matrix(factor(y)~., data=vvv,contrasts.arg = ctr)
 
 # se da problemi prova a rifare factor() sui factor, non va se ci sono livelli
 # in piu che non esistono
 
 
 set.seed(1)
-m.lasso_logit.cv=cv.glmnet(x[,-1], factor(sss$y), 
+m.lasso_logit.cv=cv.glmnet(x[,-1], factor(sss$y),
                            alpha=1,lambda.min.ratio=1e-10,
                            family="binomial",
                            trace.it = TRUE,
@@ -522,8 +510,6 @@ pred.lasso_logit.cv = predict(m.lasso_logit.cv, newx=x.vvv[,-1],s=lambda.ottimo,
                               type="response")
 err_lasso_logit <- classification_metrics(pred.lasso_logit.cv,vvv$y)
 print.classification_metrics(err_lasso_logit)
-
-
 
 
 # LASSO - modello lineare con interazioni ----------------------------------------------------
@@ -540,7 +526,7 @@ make_contr.sum <- function(v, dd) {
 }
 ctr <- setNames(lapply(cat_vars, make_contr.sum, dd=sss), cat_vars)
 x <- model.matrix(y~(.)^2, data=sss,contrasts.arg = ctr)
-x.vvv <- model.matrix(y~(.)^2, data=vvv,contrasts.arg = ctr) 
+x.vvv <- model.matrix(y~(.)^2, data=vvv,contrasts.arg = ctr)
 
 # se da problemi prova a rifare factor() sui factor, non va se ci sono livelli
 # in piu che non esistono
@@ -563,7 +549,7 @@ plot_lasso_coefs(df[1:20,])
 
 # LDA ---------------------------------------------------------------------
 ### Se evenualmente vuoi stimare modelli successivi su un sottoinsieme
-# intelligente di variabili, come quelle selzezionate dal lasso 
+# intelligente di variabili, come quelle selzezionate dal lasso
 # Costruisci subset con y inclusa esplicitamente
 #subset_var <- names(sss)[names(sss) %in% df$variabile]
 #subset_var <- c(subset_var, names(id_factor))
@@ -580,31 +566,27 @@ pr_lda = predict(m_lda, vvv)
 (err_lda = classification_metrics(pr_lda$posterior[,2], vvv$y))
 
 
-
 # QDA ---------------------------------------------------------------------
 
 # occhio che la qda non stima se c'è perfetta collinearità
-m_qda = qda(y~., sss) 
+m_qda = qda(y~., sss)
 pr_qda = predict(m_qda, vvv)
 (err_qda = classification_metrics(pr_qda$posterior[,2], vvv$y))
 # POSSIBILE ERROR: se rank deficiency in group ... allora una variabile non varia
 # all'interno di una categoria della risposta, quindi non stimabile Sigma.
 
 
-
-
-
 # GAM logistico -----------------------------------------------------------
 
 library(gam)
 # Formula con smooth su tutti i predittori
-fg1 = as.formula(paste("y~s(", 
-                       paste(names(sss[-id_risposta]), collapse = ")+s("), 
+fg1 = as.formula(paste("y~s(",
+                       paste(names(sss[-id_risposta]), collapse = ")+s("),
                        ")"))
 # Modello nullo
 gam0 = gam(y ~ 1, family = binomial, data = sss)
 # Scope per selezione stepwise
-sc = gam.scope(sss, response = id_risposta, 
+sc = gam.scope(sss, response = id_risposta,
                smoother = "s", arg = c("df=2", "df=3", "df=4"))
 # Selezione stepwise (local-scoring)
 gam1 = step.Gam(gam0, scope = sc, trace = TRUE)
@@ -629,20 +611,19 @@ pr_gam = predict(gam1, vvv,type = "response")
 (err_gam = classification_metrics(pr_gam, vvv$y))
 
 
-
 # MARS --------------------------------------------------------------------
 
 ## Modello: MARS
 library(polspline)
 # utilizza X e y
-set.seed(9) 
+set.seed(9)
 cb1 = sample(1:NROW(sss), 0.5*NROW(sss))
 sss$y[cb1][1]
 cb2 = setdiff(1:NROW(sss), cb1)
 x.sss = model.matrix(y~-1+.,sss[cb1,])
 x.ccc = model.matrix(y~-1+.,sss[cb2,])
 # classify = T ci permette, nella fase di potatura, di tagliare
-# utilizzando errore di classificazione 
+# utilizzando errore di classificazione
 m_mars = polymars(response = factor(sss$y[cb1]),
                   predictors = x.sss,
                   factors = id_factor,
@@ -650,7 +631,7 @@ m_mars = polymars(response = factor(sss$y[cb1]),
                   ts.pred = x.ccc, classify = T)
 sss$y[cb1][1]
 # Polymars in automatico converte la risposta prendendo come prima modalità
-# il primo valore che viene osservato 
+# il primo valore che viene osservato
 
 # due insiemi di coefficienti (uno per ogni categoria)
 # L'ordine dei coefficienti e' stabilito dall'ordine detto sopra
@@ -673,10 +654,6 @@ head(pr_mars)
 # Prendo la prima colonna, cioè le previsioni associate alla modalità corrispondente
 # al primo valore osservato, cioè un 1
 (err_mars = classification_metrics(pr_mars[,1], vvv$y))
-
-
-
-
 
 
 # ALBERO ------------------------------------------------------------------
@@ -714,7 +691,7 @@ plot(cptable$nodes, cptable$xerror,
      xlab = "Numero di nodi terminali",
      ylab = "CV Error (xerror)",
      main = "Scelta del numero di nodi")
-abline(v = 40, 
+abline(v = 40,
        col = "red", lty = 2)
 
 # Scegli il cp corrispondente al numero di nodi desiderato
@@ -730,10 +707,6 @@ pr_tree <- predict(m_pruned, vvv, type = "prob")
 (err_tree = classification_metrics(pr_tree[,"1"], vvv$y,threshold=0.5))
 
 
-
-
-
-
 # boosting ----------------------------------------------------------------
 
 # y factor
@@ -745,17 +718,17 @@ cb1 = sample(1:NROW(sss), 0.5*NROW(sss))
 cb2 = setdiff(1:NROW(sss), cb1)
 
 
-m_boost = ada(x = sss[cb1,-id_risposta], 
+m_boost = ada(x = sss[cb1,-id_risposta],
               y = factor(sss$y[cb1]),
               test.x = sss[cb2,-id_risposta],
               test.y = factor(sss$y[cb2]),iter=50,verbose=TRUE)
 # errore sulla stima
 plot(m_boost)
-# errore di convalida 
+# errore di convalida
 plot(m_boost,test = T)
 
 # Se devi aggiungere alberi per sprecare meno tempo:
-#m_boost = update(m_boost,x = sss[cb1,-id_risposta], 
+#m_boost = update(m_boost,x = sss[cb1,-id_risposta],
 #               y = sss$y[cb1],
 #               test.x = sss[cb2,-id_risposta],
 #               test.y = sss$y[cb2],n.iter = 400)
@@ -763,17 +736,14 @@ plot(m_boost,test = T)
 #plot(m_boost,test = T)
 
 #ristimo su tutto:
-m_boost = ada(x = sss[,-id_risposta], 
+m_boost = ada(x = sss[,-id_risposta],
               y = sss$y,
-              ,iter = 70)
+              iter = 70)
 
 pr_boost <- predict(m_boost, vvv, type = "prob")
 
 # Prendi la colonna della classe positiva (es. "1")
 (err_boost = classification_metrics(pr_boost[,2], vvv$y,threshold=0.5))
-
-
-
 
 
 # random forest -----------------------------------------------------------
@@ -817,11 +787,9 @@ m_rf <- randomForest(
 # importance =TRUE
 
 
-
 pr_rf <- predict(m_rf, vvv, type = "prob")
 
 (err_rf <- classification_metrics(pr_rf[, "1"], vvv$y))
-
 
 
 sort_by    <- "f1"
@@ -866,8 +834,6 @@ risultati <- do.call(rbind, lapply(names(modelli_list), function(nm) {
 cat(sprintf("\nModelli ordinati per %s (%s)\n\n",
             sort_by, ifelse(decreasing, "↓ decrescente", "↑ crescente")))
 print(as.data.frame(risultati), row.names = FALSE, digits = 4)
-
-
 
 
 # roc/lift ----------------------------------------------------------------
