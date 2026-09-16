@@ -1,6 +1,6 @@
 # Data Mining – Università di Padova
 
-Questo repository raccoglie script in R e template per la reportistica sviluppati per il corso di Data Mining dell'Università degli Studi di Padova.
+Questo repository raccoglie script in R e template per la reportistica sviluppati per il corso di Data Mining dell'Università degli Studi di Padova (Dipartimento di Scienze Statistiche).
 
 Il materiale è pensato come base di lavoro per affrontare le principali fasi dell'analisi dati: 
 preparazione dei dati, stima dei modelli, convalida valutazione delle performance. 
