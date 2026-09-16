@@ -10,7 +10,7 @@ dati <- dati %>%
 # CODIFICA EFFETTIVAMENTE COME FACTOR LE ESPLICATIVE QUALITATIVE 
 # ANCHE SE SONO 0/1, IN QUESTO MODO VA TUTTO FLUIDO DOPO E NON FAI ERRORI
 # COME LISCIARE UN FACTOR
-# one-hot dei fattori a troppi livelli ------------------------------------------------
+# one-hot dei fattori a troppi livelli  ------------------------------------------------
 
 # Soglia per "troppe modalità"
 soglia_modalita = 32
